@@ -134,21 +134,51 @@ const HomePage = () => {
           </section>
         )}
 
-        {/* Today / upcoming */}
+        {/* Matches grouped by league (SofaScore-style) */}
         <section>
           <SectionHeader
-            title="Today's matches"
+            title="Matches"
             action={
               <Button asChild variant="ghost" size="sm">
                 <Link to="/matches">View all <ArrowRight className="w-4 h-4" /></Link>
               </Button>
             }
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[...live, ...upcoming].slice(0, 6).map((m) => (
-              <MatchCard key={m.id} match={m} showLeague />
-            ))}
-          </div>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+            <TabsList className="mb-3">
+              <TabsTrigger value="all">
+                All <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{live.length + upcoming.length + recent.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="live" className="gap-1.5">
+                {live.length > 0 && <span className="live-dot w-1.5 h-1.5" />}
+                Live <span className="text-[10px] tabular-nums opacity-70">{live.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="finished">
+                Finished <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{recent.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="upcoming">
+                Upcoming <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{upcoming.length}</span>
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value={tab} className="mt-0">
+              {groupedByLeague.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
+                  No matches in this category.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {groupedByLeague.map(({ league, list }) => (
+                    <LeagueMatchGroup
+                      key={league.id}
+                      league={league}
+                      matches={list}
+                      defaultOpen={list.some((m) => m.status === "live") || tab !== "all"}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
