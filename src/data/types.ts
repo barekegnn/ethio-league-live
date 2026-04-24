@@ -1,5 +1,7 @@
 export type LeagueTier = 1 | 2 | 3;
 
+export type LeagueGender = "men" | "women" | "mixed";
+
 export interface League {
   id: string;
   name: string;
@@ -8,6 +10,8 @@ export interface League {
   country: string;
   logoUrl?: string;
   season: string; // e.g. "2024/25"
+  gender?: LeagueGender;
+  ageGroup?: "senior" | "u21" | "u20" | "u17";
 }
 
 export interface Club {
