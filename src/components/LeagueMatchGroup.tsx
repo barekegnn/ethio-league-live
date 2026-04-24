@@ -25,7 +25,7 @@ export const LeagueMatchGroup = ({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 bg-secondary/50 hover:bg-secondary transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-secondary/50 hover:bg-secondary transition-colors text-left"
         aria-expanded={open}
       >
         {open ? (
@@ -33,29 +33,34 @@ export const LeagueMatchGroup = ({
         ) : (
           <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
         )}
-        <div className="flex-1 min-w-0 flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">
-            Ethiopia
-          </span>
-          <span className="text-muted-foreground/50">·</span>
+
+        <LeagueLogo league={league} size={28} />
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground leading-tight">
+            <span>{league.country}</span>
+            <span className="opacity-50">·</span>
+            <span>{league.season}</span>
+            {league.gender === "women" && (
+              <span className="px-1 py-px rounded bg-primary/10 text-primary text-[9px]">
+                W
+              </span>
+            )}
+            {league.ageGroup && league.ageGroup !== "senior" && (
+              <span className="px-1 py-px rounded bg-accent/20 text-accent-foreground text-[9px]">
+                {league.ageGroup.toUpperCase()}
+              </span>
+            )}
+          </div>
           <Link
             to={`/leagues/${league.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="font-display font-bold text-sm truncate hover:text-primary"
+            className="block font-display font-bold text-sm truncate hover:text-primary leading-tight"
           >
             {league.name}
           </Link>
-          {league.gender === "women" && (
-            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary shrink-0">
-              W
-            </span>
-          )}
-          {league.ageGroup && league.ageGroup !== "senior" && (
-            <span className="text-[9px] uppercase font-bold px-1.5 py-0.5 rounded bg-accent/20 text-accent-foreground shrink-0">
-              {league.ageGroup}
-            </span>
-          )}
         </div>
+
         <div className="flex items-center gap-2 shrink-0">
           {liveCount > 0 && (
             <span className="flex items-center gap-1 text-[10px] font-bold text-live">
