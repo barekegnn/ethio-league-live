@@ -1,18 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { LiveTicker } from "@/components/LiveTicker";
-import { MatchCard } from "@/components/MatchCard";
 import { ClubCrest } from "@/components/ClubCrest";
 import { SectionHeader } from "@/components/SectionHeader";
+import { LeagueMatchGroup } from "@/components/LeagueMatchGroup";
 import {
   matches,
   standings,
   clubById,
+  leagueById,
+  leagues,
   topScorers,
   news,
 } from "@/data/mock";
 import { ArrowRight, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import type { Match } from "@/data/types";
 
 const HomePage = () => {
   useEffect(() => {
@@ -29,15 +33,54 @@ const HomePage = () => {
   }, []);
 
   const live = matches.filter((m) => m.status === "live");
-  const upcoming = matches
-    .filter((m) => m.status === "scheduled")
-    .slice(0, 4);
-  const recent = matches
-    .filter((m) => m.status === "completed")
-    .slice(0, 4);
+  const upcoming = matches.filter((m) => m.status === "scheduled");
+  const recent = matches.filter((m) => m.status === "completed");
   const eplStandings = standings.epl.slice(0, 5);
   const scorers = topScorers().slice(0, 5);
   const featured = live[0];
+
+  const [tab, setTab] = useState<"all" | "live" | "finished" | "upcoming">("all");
+
+  const groupedByLeague = useMemo(() => {
+    const source: Match[] =
+      tab === "live"
+        ? live
+        : tab === "finished"
+          ? recent
+          : tab === "upcoming"
+            ? upcoming
+            : [...live, ...upcoming, ...recent];
+
+    const map = new Map<string, Match[]>();
+    for (const m of source) {
+      if (!map.has(m.leagueId)) map.set(m.leagueId, []);
+      map.get(m.leagueId)!.push(m);
+    }
+    // Sort matches inside each group: live first, then upcoming by kickoff, then recent by kickoff desc
+    for (const [, list] of map) {
+      list.sort((a, b) => {
+        const order = { live: 0, scheduled: 1, completed: 2, postponed: 3 } as const;
+        const ao = order[a.status];
+        const bo = order[b.status];
+        if (ao !== bo) return ao - bo;
+        if (a.status === "completed") {
+          return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
+        }
+        return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
+      });
+    }
+    // Order leagues by tier then name, but those with live matches first
+    return Array.from(map.entries())
+      .map(([id, list]) => ({ league: leagueById(id)!, list }))
+      .filter((g) => g.league)
+      .sort((a, b) => {
+        const aLive = a.list.some((m) => m.status === "live") ? 0 : 1;
+        const bLive = b.list.some((m) => m.status === "live") ? 0 : 1;
+        if (aLive !== bLive) return aLive - bLive;
+        if (a.league.tier !== b.league.tier) return a.league.tier - b.league.tier;
+        return a.league.name.localeCompare(b.league.name);
+      });
+  }, [tab, live, upcoming, recent]);
 
   return (
     <>
@@ -91,21 +134,51 @@ const HomePage = () => {
           </section>
         )}
 
-        {/* Today / upcoming */}
+        {/* Matches grouped by league (SofaScore-style) */}
         <section>
           <SectionHeader
-            title="Today's matches"
+            title="Matches"
             action={
               <Button asChild variant="ghost" size="sm">
                 <Link to="/matches">View all <ArrowRight className="w-4 h-4" /></Link>
               </Button>
             }
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[...live, ...upcoming].slice(0, 6).map((m) => (
-              <MatchCard key={m.id} match={m} showLeague />
-            ))}
-          </div>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+            <TabsList className="mb-3">
+              <TabsTrigger value="all">
+                All <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{live.length + upcoming.length + recent.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="live" className="gap-1.5">
+                {live.length > 0 && <span className="live-dot w-1.5 h-1.5" />}
+                Live <span className="text-[10px] tabular-nums opacity-70">{live.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="finished">
+                Finished <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{recent.length}</span>
+              </TabsTrigger>
+              <TabsTrigger value="upcoming">
+                Upcoming <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{upcoming.length}</span>
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value={tab} className="mt-0">
+              {groupedByLeague.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
+                  No matches in this category.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {groupedByLeague.map(({ league, list }) => (
+                    <LeagueMatchGroup
+                      key={league.id}
+                      league={league}
+                      matches={list}
+                      defaultOpen={list.some((m) => m.status === "live") || tab !== "all"}
+                    />
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </section>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -202,23 +275,6 @@ const HomePage = () => {
             </div>
           </section>
         </div>
-
-        {/* Recent results */}
-        <section>
-          <SectionHeader
-            title="Recent results"
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/matches">All results <ArrowRight className="w-4 h-4" /></Link>
-              </Button>
-            }
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {recent.map((m) => (
-              <MatchCard key={m.id} match={m} showLeague />
-            ))}
-          </div>
-        </section>
 
         {/* News */}
         <section>
