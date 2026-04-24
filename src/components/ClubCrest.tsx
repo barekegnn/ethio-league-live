@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { clubById } from "@/data/mock";
+import { CLUB_LOGOS } from "@/assets/logos";
 
 interface ClubCrestProps {
   clubId: string;
@@ -8,11 +9,28 @@ interface ClubCrestProps {
 }
 
 /**
- * Lightweight, deterministic crest built from club initials + brand color.
- * Used everywhere a real logo asset is unavailable.
+ * Renders the club crest. Prefers a real logo image when available
+ * (from CLUB_LOGOS or club.logoUrl), otherwise falls back to a
+ * deterministic initials badge built from the club's brand color.
  */
 export const ClubCrest = ({ clubId, size = 32, className }: ClubCrestProps) => {
   const club = clubById(clubId);
+  const logoSrc = CLUB_LOGOS[clubId] ?? club?.logoUrl;
+
+  if (logoSrc) {
+    return (
+      <img
+        src={logoSrc}
+        alt={club?.name ?? "Club logo"}
+        width={size}
+        height={size}
+        loading="lazy"
+        className={cn("object-contain shrink-0", className)}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
   const initials = (club?.shortName ?? "?")
     .split(/\s+/)
     .map((w) => w[0])

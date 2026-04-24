@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { League } from "@/data/types";
+import { LEAGUE_LOGOS } from "@/assets/logos";
 
 interface LeagueLogoProps {
   league: League;
@@ -8,18 +9,22 @@ interface LeagueLogoProps {
 }
 
 /**
- * Deterministic league badge built from short-name initials + a color
- * derived from tier & gender. Falls back if `logoUrl` is provided.
+ * Renders the league badge. Prefers a real image (LEAGUE_LOGOS or league.logoUrl)
+ * when available, otherwise falls back to a deterministic initials badge.
  */
 export const LeagueLogo = ({ league, size = 24, className }: LeagueLogoProps) => {
-  if (league.logoUrl) {
+  const logoSrc = LEAGUE_LOGOS[league.id] ?? league.logoUrl;
+
+  if (logoSrc) {
     return (
       <img
-        src={league.logoUrl}
+        src={logoSrc}
         alt={`${league.name} logo`}
         width={size}
         height={size}
-        className={cn("rounded-md object-cover shrink-0 ring-1 ring-border", className)}
+        loading="lazy"
+        className={cn("object-contain shrink-0", className)}
+        style={{ width: size, height: size }}
       />
     );
   }
