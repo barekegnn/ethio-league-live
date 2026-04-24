@@ -2,68 +2,114 @@ import { useEffect, useState } from "react";
 import { MatchHeader } from "@/components/MatchHeader";
 import { Pitch } from "@/components/Pitch";
 import { SubstitutesList } from "@/components/SubstitutesList";
-import { saintGeorge, ethiopianCoffee } from "@/data/lineup";
+import { MatchTimeline } from "@/components/MatchTimeline";
+import { saintGeorge, ethiopianCoffee, TeamLineup } from "@/data/lineup";
 import { Button } from "@/components/ui/button";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Users, Activity } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+type Mode = "lineup" | "timeline";
+type TeamKey = "home" | "away";
+
+const TEAMS: Record<TeamKey, TeamLineup> = {
+  home: saintGeorge,
+  away: ethiopianCoffee,
+};
 
 const Index = () => {
+  const [mode, setMode] = useState<Mode>("lineup");
+  const [teamKey, setTeamKey] = useState<TeamKey>("home");
   const [runId, setRunId] = useState(0);
 
-  // Set page title for SEO
+  const team = TEAMS[teamKey];
+
   useEffect(() => {
-    document.title = "Saint George vs Ethiopian Coffee – Lineup | Matchday 5";
-    const meta = document.querySelector('meta[name="description"]');
+    document.title = "Saint George vs Ethiopian Coffee – Lineup & Timeline | Matchday 5";
     const desc =
-      "Live broadcast lineup: Saint George vs Ethiopian Coffee, Matchday 5 of the Ethiopian Premier League. Starting XI and substitutes.";
-    if (meta) meta.setAttribute("content", desc);
-    else {
-      const m = document.createElement("meta");
-      m.name = "description";
-      m.content = desc;
-      document.head.appendChild(m);
+      "Live broadcast lineup with starting XI, substitutes, formations, and a real-time match timeline: Saint George vs Ethiopian Coffee, Matchday 5 of the Ethiopian Premier League.";
+    let meta = document.querySelector('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.setAttribute("name", "description");
+      document.head.appendChild(meta);
     }
+    meta.setAttribute("content", desc);
   }, []);
+
+  // Replay re-keys lineup elements to retrigger their entrance animations.
+  // Switching team also bumps runId so the new XI animates in.
+  const replayKey = `${teamKey}-${runId}`;
 
   return (
     <main className="min-h-screen broadcast-bg">
       <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-8 space-y-4 sm:space-y-6">
         <h1 className="sr-only">
-          Saint George vs Ethiopian Coffee – Ethiopian Premier League Matchday 5 Lineup
+          Saint George vs Ethiopian Coffee – Ethiopian Premier League Matchday 5
         </h1>
 
-        <MatchHeader key={`hdr-${runId}`} />
+        <MatchHeader />
 
-        <div key={runId} className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 sm:gap-6">
-          {/* Pitch */}
-          <section aria-label="Starting eleven on the pitch">
-            <Pitch starters={saintGeorge.starters} />
-          </section>
+        {/* Mode + Team controls */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
+            <TabsList className="bg-[hsl(var(--broadcast-panel))] border border-border/40">
+              <TabsTrigger value="lineup" className="gap-1.5 font-display text-xs sm:text-sm">
+                <Users className="w-3.5 h-3.5" />
+                Lineup
+              </TabsTrigger>
+              <TabsTrigger value="timeline" className="gap-1.5 font-display text-xs sm:text-sm">
+                <Activity className="w-3.5 h-3.5" />
+                Timeline
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-          {/* Subs panel */}
-          <aside aria-label="Substitutes" className="space-y-4 sm:space-y-6">
-            <SubstitutesList
-              subs={saintGeorge.subs}
-              initialDelay={2400}
-              stagger={130}
-            />
-            <SubstitutesList
-              subs={ethiopianCoffee.subs}
-              initialDelay={3400}
-              stagger={130}
-            />
-          </aside>
+          {mode === "lineup" && (
+            <Tabs value={teamKey} onValueChange={(v) => setTeamKey(v as TeamKey)}>
+              <TabsList className="bg-[hsl(var(--broadcast-panel))] border border-border/40">
+                <TabsTrigger value="home" className="font-display text-xs sm:text-sm">
+                  {saintGeorge.shortName}
+                </TabsTrigger>
+                <TabsTrigger value="away" className="font-display text-xs sm:text-sm">
+                  {ethiopianCoffee.shortName}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
         </div>
 
-        <div className="flex justify-center pt-2">
-          <Button
-            variant="secondary"
-            onClick={() => setRunId((n) => n + 1)}
-            className="gap-2 font-display"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Replay Animation
-          </Button>
-        </div>
+        {mode === "lineup" ? (
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 sm:gap-6">
+              <section aria-label={`${team.name} starting eleven`}>
+                <Pitch team={team} animationKey={replayKey} />
+              </section>
+
+              <aside aria-label={`${team.name} substitutes`} className="space-y-4 sm:space-y-6">
+                <SubstitutesList
+                  title={`${team.shortName.toUpperCase()} · BENCH`}
+                  subs={team.subs}
+                  initialDelay={2400}
+                  stagger={130}
+                  animationKey={replayKey}
+                />
+              </aside>
+            </div>
+
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="secondary"
+                onClick={() => setRunId((n) => n + 1)}
+                className="gap-2 font-display"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Replay Animation
+              </Button>
+            </div>
+          </>
+        ) : (
+          <MatchTimeline />
+        )}
       </div>
     </main>
   );
