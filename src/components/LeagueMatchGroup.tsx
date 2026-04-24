@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Match, League } from "@/data/types";
 import { MatchCard } from "./MatchCard";
+import { LeagueLogo } from "./LeagueLogo";
 import { cn } from "@/lib/utils";
 
 interface LeagueMatchGroupProps {
