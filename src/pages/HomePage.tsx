@@ -1,18 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { LiveTicker } from "@/components/LiveTicker";
-import { MatchCard } from "@/components/MatchCard";
 import { ClubCrest } from "@/components/ClubCrest";
 import { SectionHeader } from "@/components/SectionHeader";
+import { LeagueMatchGroup } from "@/components/LeagueMatchGroup";
 import {
   matches,
   standings,
   clubById,
+  leagueById,
+  leagues,
   topScorers,
   news,
 } from "@/data/mock";
 import { ArrowRight, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import type { Match } from "@/data/types";
 
 const HomePage = () => {
   useEffect(() => {
