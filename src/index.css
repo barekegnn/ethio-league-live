@@ -120,5 +120,22 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Oswald', 'Inter', sans-serif;
+    letter-spacing: 0.02em;
+  }
+  .pitch-bg {
+    background: var(--gradient-pitch);
+  }
+  .broadcast-bg {
+    background: var(--gradient-broadcast);
+  }
+  .text-shadow-broadcast {
+    text-shadow: 0 2px 8px hsl(0 0% 0% / 0.8);
   }
 }
