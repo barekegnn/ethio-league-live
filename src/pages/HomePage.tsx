@@ -33,15 +33,54 @@ const HomePage = () => {
   }, []);
 
   const live = matches.filter((m) => m.status === "live");
-  const upcoming = matches
-    .filter((m) => m.status === "scheduled")
-    .slice(0, 4);
-  const recent = matches
-    .filter((m) => m.status === "completed")
-    .slice(0, 4);
+  const upcoming = matches.filter((m) => m.status === "scheduled");
+  const recent = matches.filter((m) => m.status === "completed");
   const eplStandings = standings.epl.slice(0, 5);
   const scorers = topScorers().slice(0, 5);
   const featured = live[0];
+
+  const [tab, setTab] = useState<"all" | "live" | "finished" | "upcoming">("all");
+
+  const groupedByLeague = useMemo(() => {
+    const source: Match[] =
+      tab === "live"
+        ? live
+        : tab === "finished"
+          ? recent
+          : tab === "upcoming"
+            ? upcoming
+            : [...live, ...upcoming, ...recent];
+
+    const map = new Map<string, Match[]>();
+    for (const m of source) {
+      if (!map.has(m.leagueId)) map.set(m.leagueId, []);
+      map.get(m.leagueId)!.push(m);
+    }
+    // Sort matches inside each group: live first, then upcoming by kickoff, then recent by kickoff desc
+    for (const [, list] of map) {
+      list.sort((a, b) => {
+        const order = { live: 0, scheduled: 1, completed: 2, postponed: 3 } as const;
+        const ao = order[a.status];
+        const bo = order[b.status];
+        if (ao !== bo) return ao - bo;
+        if (a.status === "completed") {
+          return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
+        }
+        return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
+      });
+    }
+    // Order leagues by tier then name, but those with live matches first
+    return Array.from(map.entries())
+      .map(([id, list]) => ({ league: leagueById(id)!, list }))
+      .filter((g) => g.league)
+      .sort((a, b) => {
+        const aLive = a.list.some((m) => m.status === "live") ? 0 : 1;
+        const bLive = b.list.some((m) => m.status === "live") ? 0 : 1;
+        if (aLive !== bLive) return aLive - bLive;
+        if (a.league.tier !== b.league.tier) return a.league.tier - b.league.tier;
+        return a.league.name.localeCompare(b.league.name);
+      });
+  }, [tab, live, upcoming, recent]);
 
   return (
     <>
