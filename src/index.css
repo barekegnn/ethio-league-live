@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,51 +10,68 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 145 60% 8%;
+    --foreground: 40 30% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 145 50% 12%;
+    --card-foreground: 40 30% 96%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 145 50% 12%;
+    --popover-foreground: 40 30% 96%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Saint George red */
+    --primary: 354 78% 46%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 354 90% 60%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Ethiopian Coffee green/brown */
+    --secondary: 30 65% 28%;
+    --secondary-foreground: 40 30% 96%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 145 30% 20%;
+    --muted-foreground: 40 15% 75%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 45 95% 55%;
+    --accent-foreground: 145 60% 8%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 145 30% 22%;
+    --input: 145 30% 22%;
+    --ring: 45 95% 55%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Pitch */
+    --pitch-dark: 130 55% 22%;
+    --pitch-light: 130 50% 30%;
+    --pitch-line: 0 0% 100%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    /* Broadcast */
+    --broadcast-bg: 145 70% 6%;
+    --broadcast-panel: 145 55% 11%;
+    --broadcast-border: 45 95% 55%;
 
-    --sidebar-primary: 240 5.9% 10%;
+    --gradient-pitch: linear-gradient(180deg, hsl(130 55% 28%) 0%, hsl(130 60% 18%) 100%);
+    --gradient-broadcast: linear-gradient(135deg, hsl(145 70% 6%) 0%, hsl(145 55% 11%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(354 78% 46%), hsl(354 90% 60%));
+    --gradient-accent: linear-gradient(135deg, hsl(45 95% 55%), hsl(35 95% 50%));
 
-    --sidebar-primary-foreground: 0 0% 98%;
+    --shadow-broadcast: 0 20px 60px -10px hsl(0 0% 0% / 0.6);
+    --shadow-player: 0 8px 24px -4px hsl(0 0% 0% / 0.5);
+    --shadow-glow: 0 0 30px hsl(45 95% 55% / 0.4);
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    --transition-smooth: cubic-bezier(0.16, 1, 0.3, 1);
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-background: 145 70% 6%;
+    --sidebar-foreground: 40 30% 96%;
+    --sidebar-primary: 354 78% 46%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 145 50% 12%;
+    --sidebar-accent-foreground: 40 30% 96%;
+    --sidebar-border: 145 30% 22%;
+    --sidebar-ring: 45 95% 55%;
   }
 
   .dark {
@@ -101,5 +120,22 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Oswald', 'Inter', sans-serif;
+    letter-spacing: 0.02em;
+  }
+  .pitch-bg {
+    background: var(--gradient-pitch);
+  }
+  .broadcast-bg {
+    background: var(--gradient-broadcast);
+  }
+  .text-shadow-broadcast {
+    text-shadow: 0 2px 8px hsl(0 0% 0% / 0.8);
   }
 }
