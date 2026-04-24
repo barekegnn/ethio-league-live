@@ -276,23 +276,6 @@ const HomePage = () => {
           </section>
         </div>
 
-        {/* Recent results */}
-        <section>
-          <SectionHeader
-            title="Recent results"
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link to="/matches">All results <ArrowRight className="w-4 h-4" /></Link>
-              </Button>
-            }
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {recent.map((m) => (
-              <MatchCard key={m.id} match={m} showLeague />
-            ))}
-          </div>
-        </section>
-
         {/* News */}
         <section>
           <SectionHeader title="Latest news" />
