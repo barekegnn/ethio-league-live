@@ -1,11 +1,14 @@
 import Link from "next/link";
-import { Match } from "@/data/types";
-import { clubById, leagueById } from "@/data/mock";
+import { Match, Club, League } from "@/data/types";
 import { ClubCrest } from "./ClubCrest";
 import { cn } from "@/lib/utils";
 
 interface MatchCardProps {
   match: Match;
+  /** Optional club data — if not provided, only IDs are shown */
+  clubs?: { home?: Club; away?: Club };
+  /** Optional league data — if not provided, league info is hidden */
+  league?: League;
   showLeague?: boolean;
   className?: string;
 }
@@ -13,10 +16,12 @@ interface MatchCardProps {
 const formatTime = (iso: string) =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-export const MatchCard = ({ match, showLeague, className }: MatchCardProps) => {
-  const home = clubById(match.homeId);
-  const away = clubById(match.awayId);
-  const league = leagueById(match.leagueId);
+export const MatchCard = ({ match, clubs, league, showLeague, className }: MatchCardProps) => {
+  // Use explicitly passed club data, or fall back to names embedded in the match object
+  const homeName = clubs?.home?.shortName ?? match.homeClubName ?? match.homeId;
+  const awayName = clubs?.away?.shortName ?? match.awayClubName ?? match.awayId;
+  const homeLogo = clubs?.home?.logoUrl ?? match.homeClubLogo;
+  const awayLogo = clubs?.away?.logoUrl ?? match.awayClubLogo;
   const isLive = match.status === "live";
   const isDone = match.status === "completed";
 
@@ -38,9 +43,9 @@ export const MatchCard = ({ match, showLeague, className }: MatchCardProps) => {
         {/* Home */}
         <div className="flex items-center gap-2 min-w-0 justify-end">
           <span className="text-sm font-semibold truncate text-right">
-            {home?.shortName}
+            {homeName}
           </span>
-          <ClubCrest clubId={match.homeId} size={28} />
+          <ClubCrest clubId={match.homeId} logoUrl={homeLogo} size={28} />
         </div>
 
         {/* Score / time */}
@@ -74,7 +79,7 @@ export const MatchCard = ({ match, showLeague, className }: MatchCardProps) => {
                 {formatTime(match.kickoff)}
               </div>
               <div className="text-[10px] uppercase font-semibold text-muted-foreground">
-                Today
+                {new Date(match.kickoff).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               </div>
             </>
           )}
@@ -82,9 +87,9 @@ export const MatchCard = ({ match, showLeague, className }: MatchCardProps) => {
 
         {/* Away */}
         <div className="flex items-center gap-2 min-w-0">
-          <ClubCrest clubId={match.awayId} size={28} />
+          <ClubCrest clubId={match.awayId} logoUrl={awayLogo} size={28} />
           <span className="text-sm font-semibold truncate">
-            {away?.shortName}
+            {awayName}
           </span>
         </div>
       </div>

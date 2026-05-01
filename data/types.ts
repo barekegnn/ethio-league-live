@@ -72,6 +72,11 @@ export interface Match {
   stadium: string;
   events?: MatchEventLite[];
   attendance?: number;
+  // Club display names from the API (optional — not present in mock data)
+  homeClubName?: string;
+  awayClubName?: string;
+  homeClubLogo?: string;
+  awayClubLogo?: string;
 }
 
 export interface StandingsRow {

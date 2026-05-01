@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
-import { matches, clubById } from "@/data/mock";
+import { useMatches } from "@/lib/api/hooks/matches";
 import { ClubCrest } from "./ClubCrest";
 
 export const LiveTicker = () => {
-  const live = matches.filter((m) => m.status === "live");
+  const { data: allMatches } = useMatches({ status: "live" });
+  const live = allMatches ?? [];
+
   if (live.length === 0) return null;
 
   return (
@@ -14,28 +18,26 @@ export const LiveTicker = () => {
           Live
         </div>
         <div className="flex-1 flex gap-4 overflow-x-auto no-scrollbar">
-          {live.map((m) => {
-            const home = clubById(m.homeId);
-            const away = clubById(m.awayId);
-            return (
-              <Link
-                key={m.id}
-                href={`/match/${m.id}`}
-                className="flex items-center gap-2 text-xs whitespace-nowrap hover:text-accent transition-colors"
-              >
-                <ClubCrest clubId={m.homeId} size={18} />
-                <span className="font-semibold">{home?.shortName}</span>
-                <span className="font-display font-bold text-accent tabular-nums">
-                  {m.homeScore}-{m.awayScore}
-                </span>
-                <span className="font-semibold">{away?.shortName}</span>
-                <ClubCrest clubId={m.awayId} size={18} />
+          {live.map((m) => (
+            <Link
+              key={m.id}
+              href={`/match/${m.id}`}
+              className="flex items-center gap-2 text-xs whitespace-nowrap hover:text-accent transition-colors"
+            >
+              <ClubCrest clubId={m.homeId} logoUrl={m.homeClubLogo} size={18} />
+              <span className="font-semibold">{m.homeClubName ?? m.homeId}</span>
+              <span className="font-display font-bold text-accent tabular-nums">
+                {m.homeScore}-{m.awayScore}
+              </span>
+              <span className="font-semibold">{m.awayClubName ?? m.awayId}</span>
+              <ClubCrest clubId={m.awayId} logoUrl={m.awayClubLogo} size={18} />
+              {m.minute && (
                 <span className="text-[10px] text-background/60">
                   {m.minute}&apos;
                 </span>
-              </Link>
-            );
-          })}
+              )}
+            </Link>
+          ))}
         </div>
       </div>
     </section>

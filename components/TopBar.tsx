@@ -13,6 +13,7 @@ const desktopNav = [
   { href: "/leagues", label: "Leagues" },
   { href: "/clubs", label: "Clubs" },
   { href: "/players", label: "Players" },
+  { href: "/ratings", label: "Ratings" },
   { href: "/news", label: "News" },
 ];
 

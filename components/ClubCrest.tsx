@@ -1,17 +1,22 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import { CLUB_LOGOS } from "@/lib/logos";
 import { cn } from "@/lib/utils";
 
 interface ClubCrestProps {
   clubId: string;
+  /** Optional logo URL from the API — takes precedence over the local logo map */
+  logoUrl?: string;
   size?: number;
   className?: string;
 }
 
-export const ClubCrest = ({ clubId, size = 32, className }: ClubCrestProps) => {
-  const src = CLUB_LOGOS[clubId];
+export const ClubCrest = ({ clubId, logoUrl, size = 32, className }: ClubCrestProps) => {
+  const [apiFailed, setApiFailed] = useState(false);
+  // Prefer API logo URL, fall back to local map
+  const src = (!apiFailed && logoUrl) ? logoUrl : CLUB_LOGOS[clubId];
 
   if (!src) {
     // Fallback: deterministic initials badge
@@ -31,6 +36,22 @@ export const ClubCrest = ({ clubId, size = 32, className }: ClubCrestProps) => {
       >
         {initials}
       </span>
+    );
+  }
+
+  // Use a plain <img> for external API URLs to avoid Next.js domain restrictions at runtime
+  if (logoUrl && !apiFailed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={clubId}
+        width={size}
+        height={size}
+        onError={() => setApiFailed(true)}
+        className={cn("object-contain shrink-0", className)}
+        style={{ width: size, height: size }}
+      />
     );
   }
 

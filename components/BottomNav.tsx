@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CalendarDays, Trophy, Users, Search } from "lucide-react";
+import { Home, CalendarDays, Trophy, Users, Search, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const tabs = [
@@ -10,6 +10,7 @@ const tabs = [
   { href: "/matches", label: "Matches", icon: CalendarDays },
   { href: "/leagues", label: "Leagues", icon: Trophy },
   { href: "/clubs", label: "Clubs", icon: Users },
+  { href: "/ratings", label: "Ratings", icon: Star },
   { href: "/search", label: "Search", icon: Search },
 ];
 
@@ -22,7 +23,7 @@ export const BottomNav = () => {
       className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-card/95 backdrop-blur border-t border-border"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-6">
         {tabs.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (

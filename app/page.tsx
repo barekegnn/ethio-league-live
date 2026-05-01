@@ -6,38 +6,152 @@ import { LiveTicker } from "@/components/LiveTicker";
 import { ClubCrest } from "@/components/ClubCrest";
 import { SectionHeader } from "@/components/SectionHeader";
 import { LeagueMatchGroup } from "@/components/LeagueMatchGroup";
-import {
-  matches,
-  standings,
-  clubById,
-  leagueById,
-  topScorers,
-  news,
-} from "@/data/mock";
-import { ArrowRight, Trophy } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import type { Match } from "@/data/types";
+import { ArrowRight, Trophy } from "lucide-react";
+import { useMatches } from "@/lib/api/hooks/matches";
+import { useLeagues, useLeagueSeasons } from "@/lib/api/hooks/leagues";
+import { useSeasonStandings, useSeasonTopScorers } from "@/lib/api/hooks/seasons";
+import { NEWS_FALLBACK } from "@/lib/staticNews";
+import type { Match, League } from "@/data/types";
+
+// ── Standings + Top Scorers sidebar ──────────────────────────────────────────
+// Finds the first active (or most recent) season for the first league and
+// renders standings + top scorers for it.
+
+function StandingsSidebar({ leagues }: { leagues: League[] }) {
+  // Pick the first league that has seasons
+  const firstLeague = leagues[0];
+  const { data: seasons } = useLeagueSeasons(firstLeague?.id);
+
+  // Prefer an active season; fall back to the first one
+  const activeSeason = seasons?.find((s) => s.status === "active") ?? seasons?.[0];
+  const seasonId = activeSeason?.id;
+
+  const { data: standings, isLoading: standingsLoading } = useSeasonStandings(seasonId);
+  const { data: topScorers, isLoading: scorersLoading } = useSeasonTopScorers(seasonId, { limit: 5 });
+
+  const topRows = standings?.slice(0, 5) ?? [];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Standings table */}
+      <section className="lg:col-span-2">
+        <SectionHeader
+          title={firstLeague ? `${firstLeague.shortName} Table` : "League Table"}
+          action={
+            firstLeague ? (
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/leagues/${firstLeague.id}`}>Full table <ArrowRight className="w-4 h-4" /></Link>
+              </Button>
+            ) : undefined
+          }
+        />
+        <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
+          {standingsLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-8 w-full" />
+              ))}
+            </div>
+          ) : topRows.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No standings available yet.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-secondary/60 text-xs text-muted-foreground uppercase tracking-wider">
+                <tr>
+                  <th className="text-left py-2 px-3 w-8">#</th>
+                  <th className="text-left py-2 px-3">Club</th>
+                  <th className="text-center py-2 px-2 w-10">P</th>
+                  <th className="text-center py-2 px-2 w-10 hidden sm:table-cell">W</th>
+                  <th className="text-center py-2 px-2 w-10 hidden sm:table-cell">D</th>
+                  <th className="text-center py-2 px-2 w-10 hidden sm:table-cell">L</th>
+                  <th className="text-center py-2 px-2 w-12">GD</th>
+                  <th className="text-center py-2 px-3 w-10">Pts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topRows.map((row) => {
+                  const gd = row.goalsFor - row.goalsAgainst;
+                  return (
+                    <tr key={row.clubId} className="border-t border-border hover:bg-secondary/40 transition-colors">
+                      <td className="py-2 px-3 font-display font-bold text-muted-foreground">{row.position}</td>
+                      <td className="py-2 px-3">
+                        <Link href={`/clubs/${row.clubId}`} className="flex items-center gap-2 hover:text-primary">
+                          <ClubCrest clubId={row.clubId} size={22} />
+                          <span className="font-medium truncate">{row.clubId}</span>
+                        </Link>
+                      </td>
+                      <td className="text-center tabular-nums">{row.played}</td>
+                      <td className="text-center tabular-nums hidden sm:table-cell">{row.wins}</td>
+                      <td className="text-center tabular-nums hidden sm:table-cell">{row.draws}</td>
+                      <td className="text-center tabular-nums hidden sm:table-cell">{row.losses}</td>
+                      <td className="text-center tabular-nums">{gd > 0 ? `+${gd}` : gd}</td>
+                      <td className="text-center font-display font-bold tabular-nums">{row.points}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+
+      {/* Top scorers */}
+      <section>
+        <SectionHeader title="Top Scorers" action={<Trophy className="w-4 h-4 text-accent" />} />
+        <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
+          {scorersLoading ? (
+            <div className="p-4 space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          ) : !topScorers || topScorers.length === 0 ? (
+            <div className="p-6 text-center text-sm text-muted-foreground">No scorer data yet.</div>
+          ) : (
+            topScorers.map((p, i) => (
+              <Link
+                key={p.playerId}
+                href={`/players/${p.playerId}`}
+                className="flex items-center gap-3 p-3 hover:bg-secondary/40 transition-colors"
+              >
+                <span className="w-5 text-center font-display font-bold text-muted-foreground">{i + 1}</span>
+                <ClubCrest clubId={p.clubId} size={28} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold truncate">{p.playerName}</div>
+                  <div className="text-xs text-muted-foreground truncate">{p.clubName}</div>
+                </div>
+                <span className="font-display font-bold text-lg tabular-nums">{p.goals}</span>
+              </Link>
+            ))
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ── Main home page ────────────────────────────────────────────────────────────
 
 export default function HomePage() {
-  const live = matches.filter((m) => m.status === "live");
-  const upcoming = matches.filter((m) => m.status === "scheduled");
-  const recent = matches.filter((m) => m.status === "completed");
-  const eplStandings = standings.epl.slice(0, 5);
-  const scorers = topScorers().slice(0, 5);
-  const featured = live[0];
-
   const [tab, setTab] = useState<"all" | "live" | "finished" | "upcoming">("all");
+
+  const { data: allMatches, isLoading: matchesLoading, error: matchesError, refetch: refetchMatches } = useMatches();
+  const { data: leagues, isLoading: leaguesLoading } = useLeagues();
+
+  const live     = useMemo(() => allMatches?.filter((m) => m.status === "live")      ?? [], [allMatches]);
+  const upcoming = useMemo(() => allMatches?.filter((m) => m.status === "scheduled") ?? [], [allMatches]);
+  const recent   = useMemo(() => allMatches?.filter((m) => m.status === "completed") ?? [], [allMatches]);
+  const featured = live[0];
 
   const groupedByLeague = useMemo(() => {
     const source: Match[] =
-      tab === "live"
-        ? live
-        : tab === "finished"
-          ? recent
-          : tab === "upcoming"
-            ? upcoming
-            : [...live, ...upcoming, ...recent];
+      tab === "live"     ? live :
+      tab === "finished" ? recent :
+      tab === "upcoming" ? upcoming :
+      [...live, ...upcoming, ...recent];
 
     const map = new Map<string, Match[]>();
     for (const m of source) {
@@ -47,18 +161,19 @@ export default function HomePage() {
     for (const [, list] of map) {
       list.sort((a, b) => {
         const order = { live: 0, scheduled: 1, completed: 2, postponed: 3 } as const;
-        const ao = order[a.status];
-        const bo = order[b.status];
+        const ao = order[a.status], bo = order[b.status];
         if (ao !== bo) return ao - bo;
-        if (a.status === "completed") {
-          return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
-        }
+        if (a.status === "completed") return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
         return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
       });
     }
+
+    // Build a league lookup from the API data
+    const leagueMap = new Map<string, League>(leagues?.map((l) => [l.id, l]) ?? []);
+
     return Array.from(map.entries())
-      .map(([id, list]) => ({ league: leagueById(id)!, list }))
-      .filter((g) => g.league)
+      .map(([id, list]) => ({ league: leagueMap.get(id), list }))
+      .filter((g): g is { league: League; list: Match[] } => !!g.league)
       .sort((a, b) => {
         const aLive = a.list.some((m) => m.status === "live") ? 0 : 1;
         const bLive = b.list.some((m) => m.status === "live") ? 0 : 1;
@@ -66,7 +181,7 @@ export default function HomePage() {
         if (a.league.tier !== b.league.tier) return a.league.tier - b.league.tier;
         return a.league.name.localeCompare(b.league.name);
       });
-  }, [tab, live, upcoming, recent]);
+  }, [tab, live, upcoming, recent, leagues]);
 
   return (
     <>
@@ -74,7 +189,11 @@ export default function HomePage() {
       <div className="mx-auto max-w-7xl px-3 sm:px-6 py-4 sm:py-6 space-y-8">
         <h1 className="sr-only">Ethio-League Live — Ethiopian Football</h1>
 
-        {featured && (
+        {/* ── Featured live match hero ── */}
+        {matchesLoading && (
+          <Skeleton className="h-48 rounded-2xl" />
+        )}
+        {featured && !matchesLoading && (
           <section
             aria-label="Featured match"
             className="rounded-2xl overflow-hidden hero-bg text-white shadow-[var(--shadow-elevated)]"
@@ -85,9 +204,9 @@ export default function HomePage() {
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-8">
                 <div className="flex flex-col items-center sm:items-end gap-2 text-center sm:text-right">
-                  <ClubCrest clubId={featured.homeId} size={56} />
+                  <ClubCrest clubId={featured.homeId} logoUrl={featured.homeClubLogo} size={56} />
                   <div className="font-display font-bold text-lg sm:text-2xl">
-                    {clubById(featured.homeId)?.shortName}
+                    {featured.homeClubName ?? featured.homeId}
                   </div>
                 </div>
                 <div className="text-center">
@@ -101,9 +220,9 @@ export default function HomePage() {
                   </div>
                 </div>
                 <div className="flex flex-col items-center sm:items-start gap-2 text-center sm:text-left">
-                  <ClubCrest clubId={featured.awayId} size={56} />
+                  <ClubCrest clubId={featured.awayId} logoUrl={featured.awayClubLogo} size={56} />
                   <div className="font-display font-bold text-lg sm:text-2xl">
-                    {clubById(featured.awayId)?.shortName}
+                    {featured.awayClubName ?? featured.awayId}
                   </div>
                 </div>
               </div>
@@ -118,6 +237,7 @@ export default function HomePage() {
           </section>
         )}
 
+        {/* ── Matches section ── */}
         <section>
           <SectionHeader
             title="Matches"
@@ -130,7 +250,7 @@ export default function HomePage() {
           <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
             <TabsList className="mb-3">
               <TabsTrigger value="all">
-                All <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{live.length + upcoming.length + recent.length}</span>
+                All <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{allMatches?.length ?? 0}</span>
               </TabsTrigger>
               <TabsTrigger value="live" className="gap-1.5">
                 {live.length > 0 && <span className="live-dot w-1.5 h-1.5" />}
@@ -144,11 +264,25 @@ export default function HomePage() {
               </TabsTrigger>
             </TabsList>
             <TabsContent value={tab} className="mt-0">
-              {groupedByLeague.length === 0 ? (
+              {matchesLoading && (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-28 rounded-xl" />
+                  ))}
+                </div>
+              )}
+              {matchesError && !matchesLoading && (
+                <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">Failed to load matches.</p>
+                  <Button variant="outline" size="sm" onClick={() => refetchMatches()}>Try again</Button>
+                </div>
+              )}
+              {!matchesLoading && !matchesError && groupedByLeague.length === 0 && (
                 <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
                   No matches in this category.
                 </div>
-              ) : (
+              )}
+              {!matchesLoading && !matchesError && groupedByLeague.length > 0 && (
                 <div className="space-y-3">
                   {groupedByLeague.map(({ league, list }) => (
                     <LeagueMatchGroup
@@ -164,82 +298,30 @@ export default function HomePage() {
           </Tabs>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <section className="lg:col-span-2">
-            <SectionHeader
-              title="Premier League Table"
-              action={
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/leagues/epl">Full table <ArrowRight className="w-4 h-4" /></Link>
-                </Button>
-              }
-            />
-            <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-secondary/60 text-xs text-muted-foreground uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left py-2 px-3 w-8">#</th>
-                    <th className="text-left py-2 px-3">Club</th>
-                    <th className="text-center py-2 px-2 w-10">P</th>
-                    <th className="text-center py-2 px-2 w-10 hidden sm:table-cell">W</th>
-                    <th className="text-center py-2 px-2 w-10 hidden sm:table-cell">D</th>
-                    <th className="text-center py-2 px-2 w-10 hidden sm:table-cell">L</th>
-                    <th className="text-center py-2 px-2 w-12">GD</th>
-                    <th className="text-center py-2 px-3 w-10">Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {eplStandings.map((row) => {
-                    const c = clubById(row.clubId);
-                    const gd = row.goalsFor - row.goalsAgainst;
-                    return (
-                      <tr key={row.clubId} className="border-t border-border hover:bg-secondary/40 transition-colors">
-                        <td className="py-2 px-3 font-display font-bold text-muted-foreground">{row.position}</td>
-                        <td className="py-2 px-3">
-                          <Link href={`/clubs/${row.clubId}`} className="flex items-center gap-2 hover:text-primary">
-                            <ClubCrest clubId={row.clubId} size={22} />
-                            <span className="font-medium truncate">{c?.shortName}</span>
-                          </Link>
-                        </td>
-                        <td className="text-center tabular-nums">{row.played}</td>
-                        <td className="text-center tabular-nums hidden sm:table-cell">{row.wins}</td>
-                        <td className="text-center tabular-nums hidden sm:table-cell">{row.draws}</td>
-                        <td className="text-center tabular-nums hidden sm:table-cell">{row.losses}</td>
-                        <td className="text-center tabular-nums">{gd > 0 ? `+${gd}` : gd}</td>
-                        <td className="text-center font-display font-bold tabular-nums">{row.points}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        {/* ── Standings + Top Scorers ── */}
+        {leaguesLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Skeleton className="h-48 rounded-xl" />
             </div>
-          </section>
+            <Skeleton className="h-48 rounded-xl" />
+          </div>
+        ) : leagues && leagues.length > 0 ? (
+          <StandingsSidebar leagues={leagues} />
+        ) : null}
 
-          <section>
-            <SectionHeader title="Top Scorers" action={<Trophy className="w-4 h-4 text-accent" />} />
-            <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
-              {scorers.map((p, i) => {
-                const c = clubById(p.clubId);
-                return (
-                  <Link key={p.id} href={`/players/${p.id}`} className="flex items-center gap-3 p-3 hover:bg-secondary/40 transition-colors">
-                    <span className="w-5 text-center font-display font-bold text-muted-foreground">{i + 1}</span>
-                    <ClubCrest clubId={p.clubId} size={28} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold truncate">{p.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{c?.shortName} · {p.position}</div>
-                    </div>
-                    <span className="font-display font-bold text-lg tabular-nums">{p.goals}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        </div>
-
+        {/* ── News ── */}
         <section>
-          <SectionHeader title="Latest news" />
+          <SectionHeader
+            title="Latest news"
+            action={
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-2 py-0.5 rounded bg-secondary">
+                Sample news
+              </span>
+            }
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {news.map((n) => (
+            {NEWS_FALLBACK.map((n) => (
               <article key={n.id} className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] p-4 hover:shadow-[var(--shadow-elevated)] transition-shadow">
                 <div className="text-[10px] uppercase tracking-wider font-bold text-primary mb-1">{n.category}</div>
                 <h3 className="font-display font-bold text-base sm:text-lg leading-snug mb-1">{n.title}</h3>
