@@ -78,10 +78,28 @@ function mapPosition(code: string | null | undefined): PlayerPosition {
   switch (code?.toUpperCase()) {
     case "GK":
       return "GK";
+    // All defender variants → DF
+    case "CB":
+    case "RB":
+    case "LB":
+    case "RWB":
+    case "LWB":
     case "DF":
       return "DF";
+    // All midfielder variants → MF
+    case "CDM":
+    case "CM":
+    case "CAM":
+    case "LM":
+    case "RM":
     case "MF":
       return "MF";
+    // All forward/winger variants → FW
+    case "LW":
+    case "RW":
+    case "ST":
+    case "CF":
+    case "SS":
     case "FW":
       return "FW";
     default:
@@ -123,14 +141,20 @@ export interface RawLeague {
 }
 
 export function adaptLeague(raw: RawLeague): League {
-  // Derive a short name: use provided shortName, or first word of name, or name itself
+  // Derive a short name: use provided shortName, or abbreviate the name
   const shortName =
     raw.shortName ||
-    (raw.name.includes(" ") ? raw.name.split(" ")[0] : raw.name);
+    raw.name
+      .split(" ")
+      .filter(w => w.length > 2)
+      .map(w => w[0].toUpperCase())
+      .join("") ||
+    raw.name.split(" ")[0];
 
   // Derive current season name from the most recent season if available
+  // The league list endpoint doesn't include seasons; the detail endpoint does.
   const latestSeason = raw.seasons?.[0];
-  const seasonName = latestSeason?.name ?? "—";
+  const seasonName = latestSeason?.name ?? "2024/25";
 
   return {
     id: raw.id,
@@ -172,6 +196,8 @@ export interface RawStandingsRow {
 export function adaptSeasonStandingsRow(raw: RawStandingsRow): StandingsRow {
   return {
     clubId: raw.clubId,
+    clubName: raw.clubName ?? undefined,
+    clubLogo: nullToUndefined(raw.logoUrl),
     position: raw.rank,
     played: raw.played,
     wins: raw.won,

@@ -79,8 +79,8 @@ function StandingsSidebar({ leagues }: { leagues: League[] }) {
                       <td className="py-2 px-3 font-display font-bold text-muted-foreground">{row.position}</td>
                       <td className="py-2 px-3">
                         <Link href={`/clubs/${row.clubId}`} className="flex items-center gap-2 hover:text-primary">
-                          <ClubCrest clubId={row.clubId} size={22} />
-                          <span className="font-medium truncate">{row.clubId}</span>
+                          <ClubCrest clubId={row.clubId} logoUrl={row.clubLogo} size={22} />
+                          <span className="font-medium truncate">{row.clubName ?? row.clubId}</span>
                         </Link>
                       </td>
                       <td className="text-center tabular-nums">{row.played}</td>

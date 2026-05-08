@@ -81,6 +81,8 @@ export interface Match {
 
 export interface StandingsRow {
   clubId: string;
+  clubName?: string;   // display name from API
+  clubLogo?: string;   // logo URL from API
   position: number;
   played: number;
   wins: number;
