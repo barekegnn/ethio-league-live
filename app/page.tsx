@@ -168,11 +168,15 @@ export default function HomePage() {
       });
     }
 
-    // Build a league lookup from the API data
+    // Build a league lookup from the API data.
+    // Matches from the list endpoint set leagueId = seasonId (the API doesn't
+    // include league info in the match list response). So we fall back to the
+    // first available league when the exact ID doesn't match.
     const leagueMap = new Map<string, League>(leagues?.map((l) => [l.id, l]) ?? []);
+    const fallbackLeague = leagues?.[0];
 
     return Array.from(map.entries())
-      .map(([id, list]) => ({ league: leagueMap.get(id), list }))
+      .map(([id, list]) => ({ league: leagueMap.get(id) ?? fallbackLeague, list }))
       .filter((g): g is { league: League; list: Match[] } => !!g.league)
       .sort((a, b) => {
         const aLive = a.list.some((m) => m.status === "live") ? 0 : 1;
