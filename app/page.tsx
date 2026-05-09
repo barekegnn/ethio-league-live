@@ -5,36 +5,230 @@ import Link from "next/link";
 import { LiveTicker } from "@/components/LiveTicker";
 import { ClubCrest } from "@/components/ClubCrest";
 import { SectionHeader } from "@/components/SectionHeader";
-import { LeagueMatchGroup } from "@/components/LeagueMatchGroup";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { ArrowRight, Trophy } from "lucide-react";
+import { ArrowRight, Trophy, ChevronDown, ChevronUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useMatches } from "@/lib/api/hooks/matches";
 import { useLeagues, useLeagueSeasons } from "@/lib/api/hooks/leagues";
 import { useSeasonStandings, useSeasonTopScorers } from "@/lib/api/hooks/seasons";
 import { NEWS_FALLBACK } from "@/lib/staticNews";
 import type { Match, League } from "@/data/types";
 
-// ── Standings + Top Scorers sidebar ──────────────────────────────────────────
-// Uses the top-tier (divisionLevel 1) league, or falls back to the first one.
+// ── Compact match row ─────────────────────────────────────────────────────────
+function MatchRow({ m }: { m: Match }) {
+  const isLive = m.status === "live";
+  const isDone = m.status === "completed";
+  return (
+    <Link
+      href={`/match/${m.id}`}
+      className="flex items-center gap-2 px-3 py-2.5 hover:bg-secondary/50 transition-colors"
+    >
+      {/* Home */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+        <span className="text-xs font-semibold truncate text-right leading-tight">
+          {m.homeClubName ?? m.homeId}
+        </span>
+        <ClubCrest clubId={m.homeId} logoUrl={m.homeClubLogo} size={20} />
+      </div>
 
+      {/* Score / time */}
+      <div className="shrink-0 min-w-[56px] text-center">
+        {isLive ? (
+          <div className="flex flex-col items-center">
+            <span className="font-display font-bold text-sm tabular-nums text-live">
+              {m.homeScore}–{m.awayScore}
+            </span>
+            <span className="text-[9px] font-bold text-live flex items-center gap-0.5">
+              <span className="live-dot w-1 h-1" />{m.minute}&apos;
+            </span>
+          </div>
+        ) : isDone ? (
+          <div className="flex flex-col items-center">
+            <span className="font-display font-bold text-sm tabular-nums">
+              {m.homeScore}–{m.awayScore}
+            </span>
+            <span className="text-[9px] uppercase font-semibold text-muted-foreground">FT</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center">
+            <span className="font-display font-bold text-xs tabular-nums text-muted-foreground">
+              {new Date(m.kickoff).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <span className="text-[9px] text-muted-foreground">
+              {new Date(m.kickoff).toLocaleDateString([], { month: "short", day: "numeric" })}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Away */}
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <ClubCrest clubId={m.awayId} logoUrl={m.awayClubLogo} size={20} />
+        <span className="text-xs font-semibold truncate leading-tight">
+          {m.awayClubName ?? m.awayId}
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+// ── Matches widget ────────────────────────────────────────────────────────────
+// Compact, space-efficient filter + preview. Max 6 items shown, "See all" link.
+function MatchesWidget({ allMatches, isLoading, error, refetch }: {
+  allMatches: Match[] | undefined;
+  isLoading: boolean;
+  error: Error | null;
+  refetch: () => void;
+}) {
+  type Filter = "live" | "upcoming" | "results";
+  const live     = useMemo(() => allMatches?.filter((m) => m.status === "live")      ?? [], [allMatches]);
+  const upcoming = useMemo(() => allMatches?.filter((m) => m.status === "scheduled") ?? [], [allMatches]);
+  const recent   = useMemo(() => allMatches?.filter((m) => m.status === "completed") ?? [], [allMatches]);
+
+  // Auto-select: live if any, else upcoming, else results
+  const defaultFilter: Filter = live.length > 0 ? "live" : upcoming.length > 0 ? "upcoming" : "results";
+  const [filter, setFilter] = useState<Filter>(defaultFilter);
+  const [showAll, setShowAll] = useState(false);
+
+  const PREVIEW = 6;
+
+  // For results: show only the latest round
+  const latestRoundMatches = useMemo(() => {
+    if (recent.length === 0) return [];
+    const maxRound = Math.max(...recent.map((m) => m.matchday ?? 0));
+    return recent.filter((m) => (m.matchday ?? 0) === maxRound);
+  }, [recent]);
+
+  const source = filter === "live" ? live : filter === "upcoming"
+    ? [...upcoming].sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff))
+    : latestRoundMatches;
+
+  const displayed = showAll ? source : source.slice(0, PREVIEW);
+  const hasMore = source.length > PREVIEW;
+
+  const latestRound = useMemo(() => {
+    if (recent.length === 0) return null;
+    return Math.max(...recent.map((m) => m.matchday ?? 0));
+  }, [recent]);
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-display font-bold text-lg tracking-tight">Matches</h2>
+        <Link
+          href="/matches"
+          className="text-xs text-primary font-semibold flex items-center gap-0.5 hover:underline"
+        >
+          View all <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+
+      {/* ── Filter pills ── */}
+      <div className="flex items-center gap-1.5 mb-3 overflow-x-auto no-scrollbar pb-0.5">
+        {(["live", "upcoming", "results"] as Filter[]).map((f) => {
+          const count = f === "live" ? live.length : f === "upcoming" ? upcoming.length : recent.length;
+          const isActive = filter === f;
+          return (
+            <button
+              key={f}
+              onClick={() => { setFilter(f); setShowAll(false); }}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
+                isActive
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+              )}
+            >
+              {f === "live" && live.length > 0 && (
+                <span className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-white animate-pulse" : "bg-live")} />
+              )}
+              <span className="capitalize">{f === "results" ? "Results" : f === "upcoming" ? "Upcoming" : "Live"}</span>
+              {count > 0 && (
+                <span className={cn(
+                  "text-[10px] tabular-nums",
+                  isActive ? "opacity-80" : "opacity-60"
+                )}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+
+        {/* Round badge for results */}
+        {filter === "results" && latestRound !== null && (
+          <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground font-bold px-2 py-1 rounded-full bg-secondary/60">
+            Round {latestRound}
+          </span>
+        )}
+      </div>
+
+      {/* ── Content ── */}
+      <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
+        {isLoading && (
+          <div className="divide-y divide-border">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                <Skeleton className="h-4 flex-1 rounded" />
+                <Skeleton className="h-6 w-14 rounded" />
+                <Skeleton className="h-4 flex-1 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && !isLoading && (
+          <div className="p-5 text-center space-y-2">
+            <p className="text-sm text-muted-foreground">Failed to load matches.</p>
+            <Button variant="outline" size="sm" onClick={refetch}>Try again</Button>
+          </div>
+        )}
+
+        {!isLoading && !error && displayed.length === 0 && (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            {filter === "live" ? "No live matches right now." :
+             filter === "upcoming" ? "No upcoming fixtures." :
+             "No results yet."}
+          </div>
+        )}
+
+        {!isLoading && !error && displayed.length > 0 && (
+          <div className="divide-y divide-border">
+            {displayed.map((m) => <MatchRow key={m.id} m={m} />)}
+          </div>
+        )}
+
+        {/* Show more / less toggle */}
+        {!isLoading && !error && hasMore && (
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="w-full flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors border-t border-border"
+          >
+            {showAll ? (
+              <><ChevronUp className="w-3.5 h-3.5" /> Show less</>
+            ) : (
+              <><ChevronDown className="w-3.5 h-3.5" /> {source.length - PREVIEW} more {filter === "results" ? "results" : "matches"}</>
+            )}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ── Standings + Top Scorers sidebar ──────────────────────────────────────────
 function StandingsSidebar({ leagues }: { leagues: League[] }) {
-  // Pick the top-tier league (divisionLevel 1 = Premier League), fall back to first
   const topLeague = leagues.find((l) => l.tier === 1) ?? leagues[0];
   const { data: seasons } = useLeagueSeasons(topLeague?.id);
-
   const activeSeason = seasons?.find((s) => s.status === "active") ?? seasons?.[0];
   const seasonId = activeSeason?.id;
-
   const { data: standings, isLoading: standingsLoading } = useSeasonStandings(seasonId);
   const { data: topScorers, isLoading: scorersLoading } = useSeasonTopScorers(seasonId, { limit: 5 });
-
   const topRows = standings?.slice(0, 5) ?? [];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Standings table */}
       <section className="lg:col-span-2">
         <SectionHeader
           title={topLeague ? `${topLeague.name} Table` : "League Table"}
@@ -49,9 +243,7 @@ function StandingsSidebar({ leagues }: { leagues: League[] }) {
         <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
           {standingsLoading ? (
             <div className="p-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-full" />
-              ))}
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
             </div>
           ) : topRows.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No standings available yet.</div>
@@ -96,25 +288,18 @@ function StandingsSidebar({ leagues }: { leagues: League[] }) {
         </div>
       </section>
 
-      {/* Top scorers */}
       <section>
         <SectionHeader title="Top Scorers" action={<Trophy className="w-4 h-4 text-accent" />} />
         <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
           {scorersLoading ? (
             <div className="p-4 space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
             </div>
           ) : !topScorers || topScorers.length === 0 ? (
             <div className="p-6 text-center text-sm text-muted-foreground">No scorer data yet.</div>
           ) : (
             topScorers.map((p, i) => (
-              <Link
-                key={p.playerId}
-                href={`/players/${p.playerId}`}
-                className="flex items-center gap-3 p-3 hover:bg-secondary/40 transition-colors"
-              >
+              <Link key={p.playerId} href={`/players/${p.playerId}`} className="flex items-center gap-3 p-3 hover:bg-secondary/40 transition-colors">
                 <span className="w-5 text-center font-display font-bold text-muted-foreground">{i + 1}</span>
                 <ClubCrest clubId={p.clubId} size={28} />
                 <div className="flex-1 min-w-0">
@@ -132,72 +317,12 @@ function StandingsSidebar({ leagues }: { leagues: League[] }) {
 }
 
 // ── Main home page ────────────────────────────────────────────────────────────
-
 export default function HomePage() {
-  const [tab, setTab] = useState<"all" | "live" | "finished" | "upcoming">("all");
-
   const { data: allMatches, isLoading: matchesLoading, error: matchesError, refetch: refetchMatches } = useMatches();
   const { data: leagues, isLoading: leaguesLoading } = useLeagues();
 
-  const live     = useMemo(() => allMatches?.filter((m) => m.status === "live")      ?? [], [allMatches]);
-  const upcoming = useMemo(() => allMatches?.filter((m) => m.status === "scheduled") ?? [], [allMatches]);
-  const recent   = useMemo(() => allMatches?.filter((m) => m.status === "completed") ?? [], [allMatches]);
+  const live = useMemo(() => allMatches?.filter((m) => m.status === "live") ?? [], [allMatches]);
   const featured = live[0];
-
-  // For "finished" tab: group by round number instead of dumping all at once
-  const recentByRound = useMemo(() => {
-    const map = new Map<number, Match[]>();
-    for (const m of recent) {
-      const round = m.matchday ?? 0;
-      if (!map.has(round)) map.set(round, []);
-      map.get(round)!.push(m);
-    }
-    // Sort rounds descending (most recent first), limit to last 3 rounds
-    return Array.from(map.entries())
-      .sort(([a], [b]) => b - a)
-      .slice(0, 3);
-  }, [recent]);
-
-  const groupedByLeague = useMemo(() => {
-    // For "finished" tab we show by round, not by league group
-    if (tab === "finished") return [];
-
-    const source: Match[] =
-      tab === "live"     ? live :
-      tab === "upcoming" ? upcoming :
-      [...live, ...upcoming, ...recent];
-
-    const map = new Map<string, Match[]>();
-    for (const m of source) {
-      if (!map.has(m.leagueId)) map.set(m.leagueId, []);
-      map.get(m.leagueId)!.push(m);
-    }
-    for (const [, list] of map) {
-      list.sort((a, b) => {
-        const order = { live: 0, scheduled: 1, completed: 2, postponed: 3 } as const;
-        const ao = order[a.status], bo = order[b.status];
-        if (ao !== bo) return ao - bo;
-        if (a.status === "completed") return new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime();
-        return new Date(a.kickoff).getTime() - new Date(b.kickoff).getTime();
-      });
-    }
-
-    // Matches from the list endpoint set leagueId = seasonId.
-    // Fall back to the top-tier league when the exact ID doesn't match.
-    const leagueMap = new Map<string, League>(leagues?.map((l) => [l.id, l]) ?? []);
-    const fallbackLeague = leagues?.find((l) => l.tier === 1) ?? leagues?.[0];
-
-    return Array.from(map.entries())
-      .map(([id, list]) => ({ league: leagueMap.get(id) ?? fallbackLeague, list }))
-      .filter((g): g is { league: League; list: Match[] } => !!g.league)
-      .sort((a, b) => {
-        const aLive = a.list.some((m) => m.status === "live") ? 0 : 1;
-        const bLive = b.list.some((m) => m.status === "live") ? 0 : 1;
-        if (aLive !== bLive) return aLive - bLive;
-        if (a.league.tier !== b.league.tier) return a.league.tier - b.league.tier;
-        return a.league.name.localeCompare(b.league.name);
-      });
-  }, [tab, live, upcoming, recent, leagues]);
 
   return (
     <>
@@ -208,10 +333,7 @@ export default function HomePage() {
         {/* ── Featured live match hero ── */}
         {matchesLoading && <Skeleton className="h-48 rounded-2xl" />}
         {featured && !matchesLoading && (
-          <section
-            aria-label="Featured match"
-            className="rounded-2xl overflow-hidden hero-bg text-white shadow-[var(--shadow-elevated)]"
-          >
+          <section aria-label="Featured match" className="rounded-2xl overflow-hidden hero-bg text-white shadow-[var(--shadow-elevated)]">
             <div className="p-5 sm:p-8">
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-bold text-accent mb-4">
                 <span className="live-dot w-1.5 h-1.5" /> Live now · Round {featured.matchday}
@@ -219,158 +341,35 @@ export default function HomePage() {
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-8">
                 <div className="flex flex-col items-center sm:items-end gap-2 text-center sm:text-right">
                   <ClubCrest clubId={featured.homeId} logoUrl={featured.homeClubLogo} size={56} />
-                  <div className="font-display font-bold text-lg sm:text-2xl">
-                    {featured.homeClubName ?? featured.homeId}
-                  </div>
+                  <div className="font-display font-bold text-lg sm:text-2xl">{featured.homeClubName ?? featured.homeId}</div>
                 </div>
                 <div className="text-center">
                   <div className="font-display font-bold text-4xl sm:text-6xl tabular-nums leading-none">
-                    {featured.homeScore}
-                    <span className="mx-2 sm:mx-3 text-white/60">-</span>
-                    {featured.awayScore}
+                    {featured.homeScore}<span className="mx-2 sm:mx-3 text-white/60">-</span>{featured.awayScore}
                   </div>
-                  <div className="mt-2 text-xs sm:text-sm text-accent font-bold">
-                    {featured.minute}&apos;
-                  </div>
+                  <div className="mt-2 text-xs sm:text-sm text-accent font-bold">{featured.minute}&apos;</div>
                 </div>
                 <div className="flex flex-col items-center sm:items-start gap-2 text-center sm:text-left">
                   <ClubCrest clubId={featured.awayId} logoUrl={featured.awayClubLogo} size={56} />
-                  <div className="font-display font-bold text-lg sm:text-2xl">
-                    {featured.awayClubName ?? featured.awayId}
-                  </div>
+                  <div className="font-display font-bold text-lg sm:text-2xl">{featured.awayClubName ?? featured.awayId}</div>
                 </div>
               </div>
               <div className="mt-6 flex justify-center">
                 <Button asChild variant="secondary">
-                  <Link href={`/match/${featured.id}`}>
-                    Open Match Center <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  <Link href={`/match/${featured.id}`}>Open Match Center <ArrowRight className="w-4 h-4" /></Link>
                 </Button>
               </div>
             </div>
           </section>
         )}
 
-        {/* ── Matches section ── */}
-        <section>
-          <SectionHeader
-            title="Matches"
-            action={
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/matches">View all <ArrowRight className="w-4 h-4" /></Link>
-              </Button>
-            }
-          />
-          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-            <TabsList className="mb-3">
-              <TabsTrigger value="all">
-                All <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{allMatches?.length ?? 0}</span>
-              </TabsTrigger>
-              <TabsTrigger value="live" className="gap-1.5">
-                {live.length > 0 && <span className="live-dot w-1.5 h-1.5" />}
-                Live <span className="text-[10px] tabular-nums opacity-70">{live.length}</span>
-              </TabsTrigger>
-              <TabsTrigger value="finished">
-                Finished <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{recent.length}</span>
-              </TabsTrigger>
-              <TabsTrigger value="upcoming">
-                Upcoming <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{upcoming.length}</span>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value={tab} className="mt-0">
-              {matchesLoading && (
-                <div className="space-y-3">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-28 rounded-xl" />
-                  ))}
-                </div>
-              )}
-              {matchesError && !matchesLoading && (
-                <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">Failed to load matches.</p>
-                  <Button variant="outline" size="sm" onClick={() => refetchMatches()}>Try again</Button>
-                </div>
-              )}
-
-              {/* ── Finished tab: grouped by round ── */}
-              {!matchesLoading && !matchesError && tab === "finished" && (
-                recentByRound.length === 0 ? (
-                  <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
-                    No finished matches yet.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {recentByRound.map(([round, matches]) => (
-                      <div key={round} className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
-                        <div className="px-4 py-2.5 bg-secondary/50 border-b border-border">
-                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                            Round {round}
-                          </span>
-                        </div>
-                        <div className="divide-y divide-border">
-                          {matches
-                            .sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime())
-                            .map((m) => (
-                              <Link
-                                key={m.id}
-                                href={`/match/${m.id}`}
-                                className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 transition-colors"
-                              >
-                                <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
-                                  <span className="text-sm font-semibold truncate text-right">
-                                    {m.homeClubName ?? m.homeId}
-                                  </span>
-                                  <ClubCrest clubId={m.homeId} logoUrl={m.homeClubLogo} size={24} />
-                                </div>
-                                <div className="flex flex-col items-center shrink-0 min-w-[52px]">
-                                  <span className="font-display font-bold text-base tabular-nums">
-                                    {m.homeScore}–{m.awayScore}
-                                  </span>
-                                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">FT</span>
-                                </div>
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <ClubCrest clubId={m.awayId} logoUrl={m.awayClubLogo} size={24} />
-                                  <span className="text-sm font-semibold truncate">
-                                    {m.awayClubName ?? m.awayId}
-                                  </span>
-                                </div>
-                              </Link>
-                            ))}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="text-center">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href="/matches">See all results <ArrowRight className="w-4 h-4" /></Link>
-                      </Button>
-                    </div>
-                  </div>
-                )
-              )}
-
-              {/* ── All / Live / Upcoming tabs: grouped by league ── */}
-              {!matchesLoading && !matchesError && tab !== "finished" && (
-                groupedByLeague.length === 0 ? (
-                  <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
-                    No matches in this category.
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {groupedByLeague.map(({ league, list }) => (
-                      <LeagueMatchGroup
-                        key={league.id}
-                        league={league}
-                        matches={list}
-                        defaultOpen={list.some((m) => m.status === "live") || tab !== "all"}
-                      />
-                    ))}
-                  </div>
-                )
-              )}
-            </TabsContent>
-          </Tabs>
-        </section>
+        {/* ── Compact matches widget ── */}
+        <MatchesWidget
+          allMatches={allMatches}
+          isLoading={matchesLoading}
+          error={matchesError}
+          refetch={refetchMatches}
+        />
 
         {/* ── Standings + Top Scorers ── */}
         {leaguesLoading ? (
@@ -386,11 +385,7 @@ export default function HomePage() {
         <section>
           <SectionHeader
             title="Latest news"
-            action={
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-2 py-0.5 rounded bg-secondary">
-                Sample news
-              </span>
-            }
+            action={<span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium px-2 py-0.5 rounded bg-secondary">Sample news</span>}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {NEWS_FALLBACK.map((n) => (
