@@ -14,47 +14,62 @@ import type { Match } from "@/data/types";
 
 type Filter = "live" | "today" | "upcoming" | "results";
 
-// ── Compact dropdown ──────────────────────────────────────────────────────────
-function Dropdown<T extends string | number>({
-  label,
-  value,
-  options,
-  onChange,
+// ── Collapsible section ───────────────────────────────────────────────────────
+// A clickable header that expands/collapses its content.
+function CollapsibleSection({
+  title,
+  badge,
+  defaultOpen = false,
+  children,
 }: {
-  label: string;
-  value: T | "all";
-  options: Array<{ value: T; label: string; count?: number }>;
-  onChange: (v: T | "all") => void;
+  title: string;
+  badge?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
-    <div className="relative inline-flex items-center">
-      <select
-        value={String(value)}
-        onChange={(e) => {
-          const v = e.target.value;
-          onChange(v === "all" ? "all" : (v as unknown as T));
-        }}
-        className={cn(
-          "appearance-none pl-3 pr-8 py-1.5 rounded-lg text-xs font-semibold",
-          "bg-secondary border border-border text-foreground",
-          "hover:bg-secondary/80 focus:outline-none focus:ring-1 focus:ring-primary",
-          "cursor-pointer transition-colors"
-        )}
-        aria-label={label}
+    <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
+      {/* Header — click to toggle */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/50 transition-colors text-left"
+        aria-expanded={open}
       >
-        <option value="all">{label}</option>
-        {options.map((o) => (
-          <option key={String(o.value)} value={String(o.value)}>
-            {o.label}{o.count !== undefined ? ` (${o.count})` : ""}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="absolute right-2 w-3 h-3 text-muted-foreground pointer-events-none" />
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold">{title}</span>
+          {badge && (
+            <span className="text-[10px] font-semibold text-muted-foreground bg-secondary px-1.5 py-0.5 rounded-full">
+              {badge}
+            </span>
+          )}
+        </div>
+        <ChevronDown
+          className={cn(
+            "w-4 h-4 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+
+      {/* Collapsible body */}
+      <div
+        className={cn(
+          "grid transition-all duration-200 ease-in-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t border-border">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Compact match row (used in live + round views) ────────────────────────────
+// ── Compact match row (live + results) ────────────────────────────────────────
 function MatchRow({ m }: { m: Match }) {
   const isLive = m.status === "live";
   return (
@@ -126,102 +141,45 @@ export default function MatchesPage() {
     [allMatches]
   );
 
-  // ── League options for Live filter ────────────────────────────────────────
-  const [selectedLeague, setSelectedLeague] = useState<string>("all");
-  const leagueOptions = useMemo(() => {
-    const map = new Map<string, { name: string; count: number }>();
+  // ── Group live by league (leagueId = seasonId from API) ───────────────────
+  const liveByLeague = useMemo(() => {
+    const map = new Map<string, Match[]>();
     for (const m of live) {
-      const id = m.leagueId;
-      // Use season id as key; display as "League" since we don't have name here
-      if (!map.has(id)) map.set(id, { name: id.slice(0, 8) + "…", count: 0 });
-      map.get(id)!.count++;
+      if (!map.has(m.leagueId)) map.set(m.leagueId, []);
+      map.get(m.leagueId)!.push(m);
     }
-    return Array.from(map.entries()).map(([id, { name, count }]) => ({
-      value: id,
-      label: name,
-      count,
-    }));
+    return Array.from(map.entries());
   }, [live]);
 
-  const filteredLive = useMemo(
-    () => (selectedLeague === "all" ? live : live.filter((m) => m.leagueId === selectedLeague)),
-    [live, selectedLeague]
-  );
-
-  // ── Round options for Upcoming / Results ──────────────────────────────────
-  const [selectedUpcomingRound, setSelectedUpcomingRound] = useState<number | "all">("all");
-  const [selectedResultsRound, setSelectedResultsRound] = useState<number | "all">("all");
-
-  const upcomingRounds = useMemo(() => {
-    const map = new Map<number, number>();
+  // ── Group upcoming by round ───────────────────────────────────────────────
+  const upcomingByRound = useMemo(() => {
+    const map = new Map<number, Match[]>();
     for (const m of upcoming) {
       const r = m.matchday ?? 0;
-      map.set(r, (map.get(r) ?? 0) + 1);
+      if (!map.has(r)) map.set(r, []);
+      map.get(r)!.push(m);
     }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([r, count]) => ({ value: r, label: `Round ${r}`, count }));
+    return Array.from(map.entries()).sort(([a], [b]) => a - b);
   }, [upcoming]);
 
-  const resultsRounds = useMemo(() => {
-    const map = new Map<number, number>();
+  // ── Group results by round ────────────────────────────────────────────────
+  const resultsByRound = useMemo(() => {
+    const map = new Map<number, Match[]>();
     for (const m of results) {
       const r = m.matchday ?? 0;
-      map.set(r, (map.get(r) ?? 0) + 1);
+      if (!map.has(r)) map.set(r, []);
+      map.get(r)!.push(m);
     }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => b - a) // most recent first
-      .map(([r, count]) => ({ value: r, label: `Round ${r}`, count }));
+    return Array.from(map.entries()).sort(([a], [b]) => b - a); // most recent first
   }, [results]);
 
-  // Auto-select latest round for results — undefined when no results yet
-  const defaultResultsRound: number | undefined = resultsRounds[0]?.value;
-
-  const filteredUpcoming = useMemo(
-    () =>
-      selectedUpcomingRound === "all"
-        ? upcoming
-        : upcoming.filter((m) => (m.matchday ?? 0) === selectedUpcomingRound),
-    [upcoming, selectedUpcomingRound]
-  );
-
-  const activeResultsRound: number | undefined =
-    selectedResultsRound === "all" ? defaultResultsRound : (selectedResultsRound as number);
-  const filteredResults = useMemo(
-    () =>
-      activeResultsRound === undefined
-        ? results
-        : results.filter((m) => (m.matchday ?? 0) === activeResultsRound),
-    [results, activeResultsRound]
-  );
-
   const liveCount = live.length;
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const groupByDate = (list: Match[]) => {
-    const groups = new Map<string, Match[]>();
-    for (const m of list) {
-      const key = new Date(m.kickoff).toDateString();
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(m);
-    }
-    return Array.from(groups.entries());
-  };
 
   return (
     <div className="mx-auto max-w-5xl px-3 sm:px-6 py-4 sm:py-6 space-y-4">
       <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Matches</h1>
 
-      <Tabs
-        value={filter}
-        onValueChange={(v) => {
-          setFilter(v as Filter);
-          // Reset sub-filters when switching tabs
-          setSelectedLeague("all");
-          setSelectedUpcomingRound("all");
-          setSelectedResultsRound("all");
-        }}
-      >
+      <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
         <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:inline-flex">
           <TabsTrigger value="live" className="gap-1.5">
             <span className={cn(liveCount > 0 && "live-dot w-1.5 h-1.5")} />
@@ -238,8 +196,8 @@ export default function MatchesPage() {
         {/* ── Loading ── */}
         {isLoading && (
           <div className="mt-4 space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 rounded-xl" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 rounded-xl" />
             ))}
           </div>
         )}
@@ -253,168 +211,104 @@ export default function MatchesPage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            LIVE TAB — filter by league dropdown
+            LIVE — collapsible by league
         ══════════════════════════════════════════════════════════════════ */}
         {!isLoading && !error && (
-          <TabsContent value="live" className="mt-4 space-y-3">
-            {/* League dropdown — only show if there are multiple leagues */}
-            {leagueOptions.length > 1 && (
-              <div className="flex items-center gap-2">
-                <Dropdown
-                  label="All Leagues"
-                  value={selectedLeague}
-                  options={leagueOptions}
-                  onChange={setSelectedLeague}
-                />
-                {selectedLeague !== "all" && (
-                  <button
-                    onClick={() => setSelectedLeague("all")}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
-
-            {filteredLive.length === 0 ? (
+          <TabsContent value="live" className="mt-4 space-y-2">
+            {liveCount === 0 ? (
               <div className="bg-card rounded-xl border border-border p-10 text-center text-sm text-muted-foreground">
-                {liveCount === 0 ? "No live matches right now." : "No matches for this league."}
+                No live matches right now.
+              </div>
+            ) : liveByLeague.length === 1 ? (
+              // Only one league — show matches directly without collapsible
+              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border overflow-hidden">
+                {liveByLeague[0][1].map((m) => <MatchRow key={m.id} m={m} />)}
               </div>
             ) : (
-              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border overflow-hidden">
-                {filteredLive.map((m) => <MatchRow key={m.id} m={m} />)}
-              </div>
+              // Multiple leagues — each in its own collapsible
+              liveByLeague.map(([leagueId, matches], i) => (
+                <CollapsibleSection
+                  key={leagueId}
+                  title={`League ${i + 1}`}
+                  badge={`${matches.length} live`}
+                  defaultOpen={i === 0}
+                >
+                  <div className="divide-y divide-border">
+                    {matches.map((m) => <MatchRow key={m.id} m={m} />)}
+                  </div>
+                </CollapsibleSection>
+              ))
             )}
           </TabsContent>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            TODAY TAB — grouped by date (no extra filter needed)
+            TODAY — flat list grouped by time
         ══════════════════════════════════════════════════════════════════ */}
         {!isLoading && !error && (
           <TabsContent value="today" className="mt-4">
             {today.length === 0 ? (
               <div className="text-center text-muted-foreground py-12">No matches today.</div>
             ) : (
-              <div className="space-y-6">
-                {groupByDate(today).map(([date, list]) => (
-                  <section key={date}>
-                    <h2 className="font-display text-xs uppercase tracking-wider text-muted-foreground font-bold mb-2">
-                      {new Date(date).toLocaleDateString(undefined, {
-                        weekday: "long", month: "long", day: "numeric",
-                      })}
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {list.map((m) => <MatchCard key={m.id} match={m} showLeague />)}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════
-            UPCOMING TAB — filter by round dropdown
-        ══════════════════════════════════════════════════════════════════ */}
-        {!isLoading && !error && (
-          <TabsContent value="upcoming" className="mt-4 space-y-3">
-            {upcomingRounds.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Dropdown
-                  label="All Rounds"
-                  value={selectedUpcomingRound}
-                  options={upcomingRounds}
-                  onChange={setSelectedUpcomingRound}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {filteredUpcoming.length} fixture{filteredUpcoming.length !== 1 ? "s" : ""}
-                </span>
-                {selectedUpcomingRound !== "all" && (
-                  <button
-                    onClick={() => setSelectedUpcomingRound("all")}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
-
-            {filteredUpcoming.length === 0 ? (
-              <div className="text-center text-muted-foreground py-12">No upcoming fixtures.</div>
-            ) : selectedUpcomingRound === "all" ? (
-              // All rounds: show each round as a card
-              <div className="space-y-4">
-                {upcomingRounds.map(({ value: round }) => {
-                  const roundMatches = filteredUpcoming.filter((m) => (m.matchday ?? 0) === round);
-                  if (roundMatches.length === 0) return null;
-                  return (
-                    <div key={round} className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
-                      <div className="px-4 py-2.5 bg-secondary/50 border-b border-border flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                          Round {round}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {roundMatches.length} match{roundMatches.length !== 1 ? "es" : ""}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 sm:divide-x divide-border">
-                        {roundMatches.map((m) => (
-                          <div key={m.id} className="p-2">
-                            <MatchCard match={m} className="border-0 shadow-none" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              // Single round selected: flat grid
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {filteredUpcoming.map((m) => <MatchCard key={m.id} match={m} showLeague />)}
+                {today
+                  .sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff))
+                  .map((m) => <MatchCard key={m.id} match={m} showLeague />)}
               </div>
             )}
           </TabsContent>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            RESULTS TAB — filter by round dropdown (defaults to latest)
+            UPCOMING — collapsible by round
+            First round open by default, rest collapsed
         ══════════════════════════════════════════════════════════════════ */}
         {!isLoading && !error && (
-          <TabsContent value="results" className="mt-4 space-y-3">
-            {resultsRounds.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Dropdown
-                  label="Select Round"
-                  value={activeResultsRound ?? "all"}
-                  options={resultsRounds}
-                  onChange={setSelectedResultsRound}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {filteredResults.length} result{filteredResults.length !== 1 ? "s" : ""}
-                </span>
-              </div>
+          <TabsContent value="upcoming" className="mt-4 space-y-2">
+            {upcomingByRound.length === 0 ? (
+              <div className="text-center text-muted-foreground py-12">No upcoming fixtures.</div>
+            ) : (
+              upcomingByRound.map(([round, matches], i) => (
+                <CollapsibleSection
+                  key={round}
+                  title={`Round ${round}`}
+                  badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
+                  defaultOpen={i === 0}
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 divide-border">
+                    {matches.map((m) => (
+                      <div key={m.id} className="p-2 sm:border-r border-border last:border-r-0">
+                        <MatchCard match={m} className="border-0 shadow-none hover:bg-secondary/30" />
+                      </div>
+                    ))}
+                  </div>
+                </CollapsibleSection>
+              ))
             )}
+          </TabsContent>
+        )}
 
-            {filteredResults.length === 0 ? (
+        {/* ══════════════════════════════════════════════════════════════════
+            RESULTS — collapsible by round
+            Latest round open by default, older rounds collapsed
+        ══════════════════════════════════════════════════════════════════ */}
+        {!isLoading && !error && (
+          <TabsContent value="results" className="mt-4 space-y-2">
+            {resultsByRound.length === 0 ? (
               <div className="text-center text-muted-foreground py-12">No results yet.</div>
             ) : (
-              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
-                <div className="px-4 py-2.5 bg-secondary/50 border-b border-border flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                    Round {typeof activeResultsRound === "number" ? activeResultsRound : "—"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {filteredResults.length} match{filteredResults.length !== 1 ? "es" : ""}
-                  </span>
-                </div>
-                <div className="divide-y divide-border">
-                  {filteredResults.map((m) => <MatchRow key={m.id} m={m} />)}
-                </div>
-              </div>
+              resultsByRound.map(([round, matches], i) => (
+                <CollapsibleSection
+                  key={round}
+                  title={`Round ${round}`}
+                  badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
+                  defaultOpen={i === 0}
+                >
+                  <div className="divide-y divide-border">
+                    {matches.map((m) => <MatchRow key={m.id} m={m} />)}
+                  </div>
+                </CollapsibleSection>
+              ))
             )}
           </TabsContent>
         )}
