@@ -4,6 +4,7 @@ import { TopBar } from "@/components/TopBar";
 import { BottomNav } from "@/components/BottomNav";
 import { Providers } from "@/components/Providers";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 
 export const metadata: Metadata = {
   title: "Ethio-League Live · Ethiopian Football Hub",
@@ -75,6 +76,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-background flex flex-col">
         <Providers>
           <ServiceWorkerRegistration />
+          <PWAInstallPrompt />
           <TopBar />
           <main className="flex-1 pb-20 lg:pb-10">{children}</main>
           <BottomNav />

@@ -17,15 +17,13 @@ import { NEWS_FALLBACK } from "@/lib/staticNews";
 import type { Match, League } from "@/data/types";
 
 // ── Standings + Top Scorers sidebar ──────────────────────────────────────────
-// Finds the first active (or most recent) season for the first league and
-// renders standings + top scorers for it.
+// Uses the top-tier (divisionLevel 1) league, or falls back to the first one.
 
 function StandingsSidebar({ leagues }: { leagues: League[] }) {
-  // Pick the first league that has seasons
-  const firstLeague = leagues[0];
-  const { data: seasons } = useLeagueSeasons(firstLeague?.id);
+  // Pick the top-tier league (divisionLevel 1 = Premier League), fall back to first
+  const topLeague = leagues.find((l) => l.tier === 1) ?? leagues[0];
+  const { data: seasons } = useLeagueSeasons(topLeague?.id);
 
-  // Prefer an active season; fall back to the first one
   const activeSeason = seasons?.find((s) => s.status === "active") ?? seasons?.[0];
   const seasonId = activeSeason?.id;
 
@@ -39,11 +37,11 @@ function StandingsSidebar({ leagues }: { leagues: League[] }) {
       {/* Standings table */}
       <section className="lg:col-span-2">
         <SectionHeader
-          title={firstLeague ? `${firstLeague.shortName} Table` : "League Table"}
+          title={topLeague ? `${topLeague.name} Table` : "League Table"}
           action={
-            firstLeague ? (
+            topLeague ? (
               <Button asChild variant="ghost" size="sm">
-                <Link href={`/leagues/${firstLeague.id}`}>Full table <ArrowRight className="w-4 h-4" /></Link>
+                <Link href={`/leagues/${topLeague.id}`}>Full table <ArrowRight className="w-4 h-4" /></Link>
               </Button>
             ) : undefined
           }
@@ -146,10 +144,26 @@ export default function HomePage() {
   const recent   = useMemo(() => allMatches?.filter((m) => m.status === "completed") ?? [], [allMatches]);
   const featured = live[0];
 
+  // For "finished" tab: group by round number instead of dumping all at once
+  const recentByRound = useMemo(() => {
+    const map = new Map<number, Match[]>();
+    for (const m of recent) {
+      const round = m.matchday ?? 0;
+      if (!map.has(round)) map.set(round, []);
+      map.get(round)!.push(m);
+    }
+    // Sort rounds descending (most recent first), limit to last 3 rounds
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b - a)
+      .slice(0, 3);
+  }, [recent]);
+
   const groupedByLeague = useMemo(() => {
+    // For "finished" tab we show by round, not by league group
+    if (tab === "finished") return [];
+
     const source: Match[] =
       tab === "live"     ? live :
-      tab === "finished" ? recent :
       tab === "upcoming" ? upcoming :
       [...live, ...upcoming, ...recent];
 
@@ -168,12 +182,10 @@ export default function HomePage() {
       });
     }
 
-    // Build a league lookup from the API data.
-    // Matches from the list endpoint set leagueId = seasonId (the API doesn't
-    // include league info in the match list response). So we fall back to the
-    // first available league when the exact ID doesn't match.
+    // Matches from the list endpoint set leagueId = seasonId.
+    // Fall back to the top-tier league when the exact ID doesn't match.
     const leagueMap = new Map<string, League>(leagues?.map((l) => [l.id, l]) ?? []);
-    const fallbackLeague = leagues?.[0];
+    const fallbackLeague = leagues?.find((l) => l.tier === 1) ?? leagues?.[0];
 
     return Array.from(map.entries())
       .map(([id, list]) => ({ league: leagueMap.get(id) ?? fallbackLeague, list }))
@@ -194,9 +206,7 @@ export default function HomePage() {
         <h1 className="sr-only">Ethio-League Live — Ethiopian Football</h1>
 
         {/* ── Featured live match hero ── */}
-        {matchesLoading && (
-          <Skeleton className="h-48 rounded-2xl" />
-        )}
+        {matchesLoading && <Skeleton className="h-48 rounded-2xl" />}
         {featured && !matchesLoading && (
           <section
             aria-label="Featured match"
@@ -204,7 +214,7 @@ export default function HomePage() {
           >
             <div className="p-5 sm:p-8">
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-bold text-accent mb-4">
-                <span className="live-dot w-1.5 h-1.5" /> Live now · Matchday {featured.matchday}
+                <span className="live-dot w-1.5 h-1.5" /> Live now · Round {featured.matchday}
               </div>
               <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 sm:gap-8">
                 <div className="flex flex-col items-center sm:items-end gap-2 text-center sm:text-right">
@@ -267,6 +277,7 @@ export default function HomePage() {
                 Upcoming <span className="ml-1.5 text-[10px] tabular-nums opacity-70">{upcoming.length}</span>
               </TabsTrigger>
             </TabsList>
+
             <TabsContent value={tab} className="mt-0">
               {matchesLoading && (
                 <div className="space-y-3">
@@ -281,22 +292,81 @@ export default function HomePage() {
                   <Button variant="outline" size="sm" onClick={() => refetchMatches()}>Try again</Button>
                 </div>
               )}
-              {!matchesLoading && !matchesError && groupedByLeague.length === 0 && (
-                <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
-                  No matches in this category.
-                </div>
+
+              {/* ── Finished tab: grouped by round ── */}
+              {!matchesLoading && !matchesError && tab === "finished" && (
+                recentByRound.length === 0 ? (
+                  <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
+                    No finished matches yet.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentByRound.map(([round, matches]) => (
+                      <div key={round} className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
+                        <div className="px-4 py-2.5 bg-secondary/50 border-b border-border">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Round {round}
+                          </span>
+                        </div>
+                        <div className="divide-y divide-border">
+                          {matches
+                            .sort((a, b) => new Date(b.kickoff).getTime() - new Date(a.kickoff).getTime())
+                            .map((m) => (
+                              <Link
+                                key={m.id}
+                                href={`/match/${m.id}`}
+                                className="flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
+                                  <span className="text-sm font-semibold truncate text-right">
+                                    {m.homeClubName ?? m.homeId}
+                                  </span>
+                                  <ClubCrest clubId={m.homeId} logoUrl={m.homeClubLogo} size={24} />
+                                </div>
+                                <div className="flex flex-col items-center shrink-0 min-w-[52px]">
+                                  <span className="font-display font-bold text-base tabular-nums">
+                                    {m.homeScore}–{m.awayScore}
+                                  </span>
+                                  <span className="text-[10px] uppercase font-semibold text-muted-foreground">FT</span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <ClubCrest clubId={m.awayId} logoUrl={m.awayClubLogo} size={24} />
+                                  <span className="text-sm font-semibold truncate">
+                                    {m.awayClubName ?? m.awayId}
+                                  </span>
+                                </div>
+                              </Link>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-center">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href="/matches">See all results <ArrowRight className="w-4 h-4" /></Link>
+                      </Button>
+                    </div>
+                  </div>
+                )
               )}
-              {!matchesLoading && !matchesError && groupedByLeague.length > 0 && (
-                <div className="space-y-3">
-                  {groupedByLeague.map(({ league, list }) => (
-                    <LeagueMatchGroup
-                      key={league.id}
-                      league={league}
-                      matches={list}
-                      defaultOpen={list.some((m) => m.status === "live") || tab !== "all"}
-                    />
-                  ))}
-                </div>
+
+              {/* ── All / Live / Upcoming tabs: grouped by league ── */}
+              {!matchesLoading && !matchesError && tab !== "finished" && (
+                groupedByLeague.length === 0 ? (
+                  <div className="bg-card rounded-xl border border-border p-8 text-center text-sm text-muted-foreground">
+                    No matches in this category.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {groupedByLeague.map(({ league, list }) => (
+                      <LeagueMatchGroup
+                        key={league.id}
+                        league={league}
+                        matches={list}
+                        defaultOpen={list.some((m) => m.status === "live") || tab !== "all"}
+                      />
+                    ))}
+                  </div>
+                )
               )}
             </TabsContent>
           </Tabs>
@@ -305,9 +375,7 @@ export default function HomePage() {
         {/* ── Standings + Top Scorers ── */}
         {leaguesLoading ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <Skeleton className="h-48 rounded-xl" />
-            </div>
+            <div className="lg:col-span-2"><Skeleton className="h-48 rounded-xl" /></div>
             <Skeleton className="h-48 rounded-xl" />
           </div>
         ) : leagues && leagues.length > 0 ? (
