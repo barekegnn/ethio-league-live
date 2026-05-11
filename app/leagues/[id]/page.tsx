@@ -83,13 +83,13 @@ export default function LeagueDetailPage() {
       </header>
 
       <Tabs defaultValue="standings">
-        <TabsList className="w-full grid grid-cols-6">
-          <TabsTrigger value="standings">Standings</TabsTrigger>
-          <TabsTrigger value="fixtures">Fixtures</TabsTrigger>
-          <TabsTrigger value="results">Results</TabsTrigger>
-          <TabsTrigger value="scorers">Scorers</TabsTrigger>
-          <TabsTrigger value="discipline">Discipline</TabsTrigger>
-          <TabsTrigger value="players">Players</TabsTrigger>
+        <TabsList className="w-full grid grid-cols-3 sm:grid-cols-6 gap-1">
+          <TabsTrigger value="standings" className="text-xs sm:text-sm px-2 sm:px-3">Standings</TabsTrigger>
+          <TabsTrigger value="fixtures" className="text-xs sm:text-sm px-2 sm:px-3">Fixtures</TabsTrigger>
+          <TabsTrigger value="results" className="text-xs sm:text-sm px-2 sm:px-3">Results</TabsTrigger>
+          <TabsTrigger value="scorers" className="text-xs sm:text-sm px-2 sm:px-3">Scorers</TabsTrigger>
+          <TabsTrigger value="discipline" className="text-xs sm:text-sm px-2 sm:px-3">Discipline</TabsTrigger>
+          <TabsTrigger value="players" className="text-xs sm:text-sm px-2 sm:px-3">Players</TabsTrigger>
         </TabsList>
 
         {/* STANDINGS */}

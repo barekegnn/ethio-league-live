@@ -180,17 +180,17 @@ export default function MatchesPage() {
       <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight">Matches</h1>
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
-        <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:inline-flex">
-          <TabsTrigger value="live" className="gap-1.5">
+        <TabsList className="w-full sm:w-auto grid grid-cols-4 sm:inline-flex gap-1">
+          <TabsTrigger value="live" className="gap-1.5 text-xs sm:text-sm px-2 sm:px-3">
             <span className={cn(liveCount > 0 && "live-dot w-1.5 h-1.5")} />
             Live
             {liveCount > 0 && (
               <span className="text-[10px] tabular-nums opacity-70">{liveCount}</span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="today">Today</TabsTrigger>
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsTrigger value="today" className="text-xs sm:text-sm px-2 sm:px-3">Today</TabsTrigger>
+          <TabsTrigger value="upcoming" className="text-xs sm:text-sm px-2 sm:px-3">Upcoming</TabsTrigger>
+          <TabsTrigger value="results" className="text-xs sm:text-sm px-2 sm:px-3">Results</TabsTrigger>
         </TabsList>
 
         {/* ── Loading ── */}

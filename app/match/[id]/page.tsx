@@ -137,11 +137,11 @@ export default function MatchDetailPage() {
       {/* ── Tabs ── */}
       <div className="px-3 sm:px-6 py-4 sm:py-6">
         <Tabs defaultValue={isLive || isDone ? "events" : "lineups"}>
-          <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="summary">Summary</TabsTrigger>
-            <TabsTrigger value="events">Events</TabsTrigger>
-            <TabsTrigger value="lineups">Lineups</TabsTrigger>
-            <TabsTrigger value="media">Media</TabsTrigger>
+          <TabsList className="w-full grid grid-cols-4 gap-1">
+            <TabsTrigger value="summary" className="text-xs sm:text-sm px-2 sm:px-3">Summary</TabsTrigger>
+            <TabsTrigger value="events" className="text-xs sm:text-sm px-2 sm:px-3">Events</TabsTrigger>
+            <TabsTrigger value="lineups" className="text-xs sm:text-sm px-2 sm:px-3">Lineups</TabsTrigger>
+            <TabsTrigger value="media" className="text-xs sm:text-sm px-2 sm:px-3">Media</TabsTrigger>
           </TabsList>
 
           {/* Summary */}

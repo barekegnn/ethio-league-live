@@ -106,14 +106,14 @@ export default function ClubDetailPage() {
 
       <div className="mx-auto max-w-5xl px-3 sm:px-6 py-4 sm:py-6">
         <Tabs defaultValue="overview">
-          <TabsList className="w-full grid grid-cols-7">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="squad">Squad</TabsTrigger>
-            <TabsTrigger value="fixtures">Fixtures</TabsTrigger>
-            <TabsTrigger value="results">Results</TabsTrigger>
-            <TabsTrigger value="staff">Staff</TabsTrigger>
-            <TabsTrigger value="stats">Stats</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
+          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-1">
+            <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
+            <TabsTrigger value="squad" className="text-xs sm:text-sm px-2 sm:px-3">Squad</TabsTrigger>
+            <TabsTrigger value="fixtures" className="text-xs sm:text-sm px-2 sm:px-3">Fixtures</TabsTrigger>
+            <TabsTrigger value="results" className="text-xs sm:text-sm px-2 sm:px-3">Results</TabsTrigger>
+            <TabsTrigger value="staff" className="text-xs sm:text-sm px-2 sm:px-3">Staff</TabsTrigger>
+            <TabsTrigger value="stats" className="text-xs sm:text-sm px-2 sm:px-3">Stats</TabsTrigger>
+            <TabsTrigger value="history" className="text-xs sm:text-sm px-2 sm:px-3">History</TabsTrigger>
           </TabsList>
 
           {/* OVERVIEW */}
