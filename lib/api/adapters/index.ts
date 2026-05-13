@@ -389,6 +389,7 @@ export interface RawMatch {
   matchDate?: string | null;
   roundNumber?: number | null;
   status?: string | null;
+  liveStartedAt?: string | null; // ISO timestamp when match went live
   homeScore?: number | null;
   awayScore?: number | null;
   attendance?: number | null;
@@ -409,6 +410,7 @@ export function adaptMatch(raw: RawMatch): Match {
     matchday: raw.roundNumber ?? 0,
     kickoff: raw.matchDate ?? new Date().toISOString(),
     status: (raw.status as MatchStatus) ?? "scheduled",
+    liveStartedAt: raw.liveStartedAt ?? null,
     homeId: raw.homeClubId ?? raw.homeClub?.id ?? "",
     awayId: raw.awayClubId ?? raw.awayClub?.id ?? "",
     homeScore: raw.homeScore ?? 0,

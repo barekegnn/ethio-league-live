@@ -65,6 +65,7 @@ export interface Match {
   kickoff: string; // ISO
   status: MatchStatus;
   minute?: number; // if live
+  liveStartedAt?: string | null; // ISO timestamp when match went live
   homeId: string;
   awayId: string;
   homeScore: number;

@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
 import { useMatch, useMatchEvents, useMatchLineups, useMatchMedia } from "@/lib/api/hooks/matches";
+import { useMatchRealtime } from "@/hooks/use-match-realtime";
 import { ClubCrest } from "@/components/ClubCrest";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,15 +13,27 @@ import { ArrowLeft, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NotFoundError } from "@/lib/api/client";
 import type { MatchLineupSide } from "@/lib/api/hooks/matches";
+import type { MatchEventPayload, ScoreUpdatePayload } from "@/lib/pusher-types";
 
 const eventIcon = (type: string) => {
   switch (type) {
-    case "goal":   return "⚽";
-    case "yellow": return "🟨";
-    case "red":    return "🟥";
-    case "sub":    return "🔁";
-    case "var":    return "📺";
-    default:       return "•";
+    case "goal":
+    case "penalty_goal":
+    case "own_goal":
+      return "⚽";
+    case "yellow":
+    case "yellow_card":
+      return "🟨";
+    case "red":
+    case "red_card":
+      return "🟥";
+    case "sub":
+    case "substitution":
+      return "🔁";
+    case "var":
+      return "📺";
+    default:
+      return "•";
   }
 };
 
@@ -28,17 +42,77 @@ export default function MatchDetailPage() {
   const id = params.id;
 
   const { data: match, isLoading: matchLoading, error: matchError, refetch: refetchMatch } = useMatch(id);
-  const { data: events, isLoading: eventsLoading } = useMatchEvents(id, match?.status);
+  const { data: initialEvents, isLoading: eventsLoading } = useMatchEvents(id, match?.status);
   const { data: lineups, isLoading: lineupsLoading } = useMatchLineups(id);
   const { data: media, isLoading: mediaLoading } = useMatchMedia(id);
+
+  // Local state for real-time updates
+  const [liveEvents, setLiveEvents] = useState<any[]>([]);
+  const [liveScore, setLiveScore] = useState<{ home: number; away: number } | null>(null);
+
+  // Real-time updates via Pusher
+  const { status: liveStatus, elapsedMinutes, isLive: isMatchLive } = useMatchRealtime({
+    matchId: id,
+    initialStatus: match?.status,
+    initialLiveStartedAt: match?.liveStartedAt,
+    onEventCreated: (event: MatchEventPayload) => {
+      // Add new event to the list
+      const newEvent = {
+        id: event.id,
+        minute: event.minute,
+        extraTime: event.extraTime,
+        type: event.eventType.name,
+        player: event.player ? `${event.player.firstName} ${event.player.lastName}` : "",
+        relatedPlayer: event.relatedPlayer ? `${event.relatedPlayer.firstName} ${event.relatedPlayer.lastName}` : "",
+        clubId: event.club?.id || "",
+        detail: event.description,
+      };
+      setLiveEvents((prev) => [...prev, newEvent]);
+    },
+    onEventUpdated: (event: MatchEventPayload) => {
+      // Update existing event
+      const updatedEvent = {
+        id: event.id,
+        minute: event.minute,
+        extraTime: event.extraTime,
+        type: event.eventType.name,
+        player: event.player ? `${event.player.firstName} ${event.player.lastName}` : "",
+        relatedPlayer: event.relatedPlayer ? `${event.relatedPlayer.firstName} ${event.relatedPlayer.lastName}` : "",
+        clubId: event.club?.id || "",
+        detail: event.description,
+      };
+      setLiveEvents((prev) => prev.map((e) => (e.id === event.id ? updatedEvent : e)));
+    },
+    onEventDeleted: (eventId: string) => {
+      // Remove deleted event
+      setLiveEvents((prev) => prev.filter((e) => e.id !== eventId));
+    },
+    onScoreUpdated: (score: ScoreUpdatePayload) => {
+      // Update score
+      setLiveScore({ home: score.homeScore, away: score.awayScore });
+    },
+    onStatusChanged: () => {
+      // Refetch match data when status changes
+      refetchMatch();
+    },
+  });
+
+  // Merge initial events with live events
+  const allEvents = [...(initialEvents || []), ...liveEvents];
+
+  // Use live score if available, otherwise use match score
+  const displayHomeScore = liveScore?.home ?? match?.homeScore ?? 0;
+  const displayAwayScore = liveScore?.away ?? match?.awayScore ?? 0;
+
+  // Use live status if available, otherwise use match status
+  const displayStatus = liveStatus || match?.status || "scheduled";
+  const isLive = displayStatus === "live";
+  const isDone = displayStatus === "completed";
 
   // 404 handling
   if (matchError instanceof NotFoundError) {
     notFound();
   }
-
-  const isLive = match?.status === "live";
-  const isDone = match?.status === "completed";
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -91,14 +165,14 @@ export default function MatchDetailPage() {
                   {isLive || isDone ? (
                     <>
                       <div className="font-display font-bold text-4xl sm:text-6xl tabular-nums leading-none">
-                        {match.homeScore}
+                        {displayHomeScore}
                         <span className="mx-2 text-white/50">-</span>
-                        {match.awayScore}
+                        {displayAwayScore}
                       </div>
                       <div className={cn("mt-2 text-xs sm:text-sm font-bold", isLive ? "text-live" : "text-white/70")}>
                         {isLive ? (
                           <span className="inline-flex items-center gap-1.5">
-                            <span className="live-dot w-1.5 h-1.5" /> {match.minute}&apos;
+                            <span className="live-dot w-1.5 h-1.5" /> {elapsedMinutes}&apos;
                           </span>
                         ) : "Full Time"}
                       </div>
@@ -179,19 +253,34 @@ export default function MatchDetailPage() {
               </div>
             ) : (
               <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
-                {!events || events.length === 0 ? (
-                  <div className="p-6 text-center text-sm text-muted-foreground">No events yet.</div>
+                {!allEvents || allEvents.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    {isLive ? "Waiting for match events..." : "No events yet."}
+                  </div>
                 ) : (
-                  [...events].sort((a, b) => b.minute - a.minute).map((e, i) => {
+                  [...allEvents].sort((a, b) => b.minute - a.minute).map((e, i) => {
                     const isHome = e.clubId === match?.homeId;
                     return (
-                      <div key={i} className={cn("p-3 flex items-center gap-3", isHome ? "" : "flex-row-reverse text-right")}>
-                        <div className="font-display font-bold text-muted-foreground tabular-nums w-10 text-center">{e.minute}&apos;</div>
+                      <div key={e.id || i} className={cn("p-3 flex items-center gap-3", isHome ? "" : "flex-row-reverse text-right")}>
+                        <div className="font-display font-bold text-muted-foreground tabular-nums w-10 text-center">
+                          {e.minute}{e.extraTime ? `+${e.extraTime}` : ""}&apos;
+                        </div>
                         <div className="text-2xl">{eventIcon(e.type)}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold truncate">{e.player}</div>
+                          <div className="text-sm font-semibold truncate">
+                            {e.player}
+                            {e.type === "substitution" && e.relatedPlayer && (
+                              <span className="text-muted-foreground"> → {e.relatedPlayer}</span>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground capitalize">
-                            {e.type === "goal" ? "Goal" : e.type}
+                            {e.type === "goal" ? "Goal" : 
+                             e.type === "penalty_goal" ? "Penalty Goal" :
+                             e.type === "own_goal" ? "Own Goal" :
+                             e.type === "yellow_card" ? "Yellow Card" :
+                             e.type === "red_card" ? "Red Card" :
+                             e.type === "substitution" ? "Substitution" :
+                             e.type}
                             {e.detail ? ` (${e.detail})` : ""}
                           </div>
                         </div>
