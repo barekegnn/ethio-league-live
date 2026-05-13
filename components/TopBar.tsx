@@ -20,6 +20,7 @@ const desktopNav = [
 export const TopBar = () => {
   const pathname = usePathname();
   const [dark, setDark] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -27,6 +28,7 @@ export const TopBar = () => {
     const isDark = stored ? stored === "dark" : prefers;
     document.documentElement.classList.toggle("dark", isDark);
     setDark(isDark);
+    setMounted(true);
   }, []);
 
   const toggleTheme = () => {
@@ -85,7 +87,8 @@ export const TopBar = () => {
             aria-label="Toggle theme"
             onClick={toggleTheme}
           >
-            {dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {/* Render nothing until mounted to avoid server/client mismatch */}
+            {mounted && (dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />)}
           </Button>
         </div>
       </div>

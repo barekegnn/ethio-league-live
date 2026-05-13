@@ -7,13 +7,16 @@
 
 import type { NewsItem } from "@/data/types";
 
+// Fixed ISO dates — no Date.now() at module level, which causes a
+// server/client hydration mismatch (server evaluates at build time,
+// client evaluates again at a different timestamp).
 export const NEWS_FALLBACK: NewsItem[] = [
   {
     id: "static-1",
     title: "Ethiopian Premier League season underway",
     excerpt:
       "The new Ethiopian Premier League season has kicked off with exciting fixtures across the country. Clubs are battling for top honours.",
-    publishedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    publishedAt: "2026-05-13T09:00:00.000Z",
     category: "League",
   },
   {
@@ -21,7 +24,7 @@ export const NEWS_FALLBACK: NewsItem[] = [
     title: "Top clubs prepare for crucial matchday",
     excerpt:
       "Several title contenders face tough away fixtures this weekend as the race for the championship heats up.",
-    publishedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    publishedAt: "2026-05-12T09:00:00.000Z",
     category: "Match Preview",
   },
   {
@@ -29,7 +32,7 @@ export const NEWS_FALLBACK: NewsItem[] = [
     title: "Young talents shine in Ethiopian football",
     excerpt:
       "A new generation of Ethiopian players is making its mark, with several under-21 stars earning call-ups to the senior national team.",
-    publishedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    publishedAt: "2026-05-11T09:00:00.000Z",
     category: "Players",
   },
   {
@@ -37,7 +40,7 @@ export const NEWS_FALLBACK: NewsItem[] = [
     title: "Stadium upgrades boost matchday experience",
     excerpt:
       "Several venues across Ethiopia have completed renovation works, improving facilities for fans attending league matches.",
-    publishedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    publishedAt: "2026-05-10T09:00:00.000Z",
     category: "Infrastructure",
   },
 ];
