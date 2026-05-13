@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { notFound } from "next/navigation";
@@ -19,6 +20,10 @@ import { NotFoundError } from "@/lib/api/client";
 export default function PlayerDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+
+  // Pagination states
+  const [careerPage, setCareerPage] = useState(1);
+  const [matchesPage, setMatchesPage] = useState(1);
 
   const { data: player, isLoading, error } = usePlayer(id);
   const { data: stats } = usePlayerStats(player?.id);
@@ -65,6 +70,24 @@ export default function PlayerDetailPage() {
     { label: "Yellow", value: stats?.totalYellowCards ?? player.yellow },
     { label: "Red", value: stats?.totalRedCards ?? player.red },
   ];
+
+  // Pagination logic for Career (10 items/page)
+  const careerPerPage = 10;
+  const paginatedCareer = useMemo(() => {
+    if (!seasons) return [];
+    const start = (careerPage - 1) * careerPerPage;
+    return seasons.slice(start, start + careerPerPage);
+  }, [seasons, careerPage]);
+  const careerTotalPages = Math.ceil((seasons?.length || 0) / careerPerPage);
+
+  // Pagination logic for Matches (15 items/page)
+  const matchesPerPage = 15;
+  const paginatedMatches = useMemo(() => {
+    if (!matches) return [];
+    const start = (matchesPage - 1) * matchesPerPage;
+    return matches.slice(start, start + matchesPerPage);
+  }, [matches, matchesPage]);
+  const matchesTotalPages = Math.ceil((matches?.length || 0) / matchesPerPage);
 
   return (
     <div>
@@ -145,30 +168,62 @@ export default function PlayerDetailPage() {
           </TabsContent>
 
           {/* CAREER */}
-          <TabsContent value="career" className="mt-4">
+          <TabsContent value="career" className="mt-4 space-y-4">
             {(!seasons || seasons.length === 0) ? (
               <div className="text-center text-sm text-muted-foreground py-8">No career history yet.</div>
             ) : (
-              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
-                <div className="px-4 py-3 border-b border-border">
-                  <h3 className="font-display font-bold">Career History</h3>
+              <>
+                <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h3 className="font-display font-bold">Career History</h3>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {paginatedCareer.map((s) => (
+                      <div key={s.seasonId} className="flex items-center gap-3 p-3 text-sm">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold truncate">{s.clubName}</div>
+                          <div className="text-xs text-muted-foreground">{s.leagueName} · {s.seasonName}</div>
+                        </div>
+                        <div className="text-right text-xs tabular-nums space-x-2 text-muted-foreground">
+                          <span><span className="font-bold text-foreground">{s.appearances}</span> apps</span>
+                          <span><span className="font-bold text-foreground">{s.goals}</span> G</span>
+                          <span><span className="font-bold text-foreground">{s.assists}</span> A</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="divide-y divide-border">
-                  {seasons.map((s) => (
-                    <div key={s.seasonId} className="flex items-center gap-3 p-3 text-sm">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-semibold truncate">{s.clubName}</div>
-                        <div className="text-xs text-muted-foreground">{s.leagueName} · {s.seasonName}</div>
-                      </div>
-                      <div className="text-right text-xs tabular-nums space-x-2 text-muted-foreground">
-                        <span><span className="font-bold text-foreground">{s.appearances}</span> apps</span>
-                        <span><span className="font-bold text-foreground">{s.goals}</span> G</span>
-                        <span><span className="font-bold text-foreground">{s.assists}</span> A</span>
-                      </div>
+
+                {/* Pagination controls */}
+                {careerTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((careerPage - 1) * careerPerPage) + 1}–{Math.min(careerPage * careerPerPage, seasons.length)} of {seasons.length}
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCareerPage((p) => Math.max(1, p - 1))}
+                        disabled={careerPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="text-xs font-medium px-3 py-1.5">
+                        Page {careerPage} of {careerTotalPages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCareerPage((p) => Math.min(careerTotalPages, p + 1))}
+                        disabled={careerPage === careerTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 

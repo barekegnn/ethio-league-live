@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { notFound } from "next/navigation";
@@ -16,9 +17,10 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { MatchCard } from "@/components/MatchCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { NotFoundError } from "@/lib/api/client";
-import { Calendar, MapPin, Users } from "lucide-react";
+import { Calendar, MapPin, Users, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 function roleBadgeClass(role: string) {
@@ -31,6 +33,14 @@ function roleBadgeClass(role: string) {
 export default function ClubDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+
+  // Pagination and search states
+  const [squadPage, setSquadPage] = useState(1);
+  const [squadSearch, setSquadSearch] = useState("");
+  const [fixturesPage, setFixturesPage] = useState(1);
+  const [resultsPage, setResultsPage] = useState(1);
+  const [staffPage, setStaffPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const { data: club, isLoading, error } = useClub(id);
   const { data: allMatches, isLoading: matchesLoading, refetch: refetchMatches } = useClubMatches(club?.id);
@@ -72,6 +82,65 @@ export default function ClubDetailPage() {
     .sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff)) ?? [];
   const results = allMatches?.filter((m) => m.status === "completed")
     .sort((a, b) => +new Date(b.kickoff) - +new Date(a.kickoff)) ?? [];
+
+  // Filter and pagination logic for Squad (20 items/page + search)
+  const filteredSquad = useMemo(() => {
+    if (!squad) return [];
+    if (!squadSearch.trim()) return squad;
+    
+    const query = squadSearch.toLowerCase();
+    return squad.filter((p) => {
+      const name = p.name.toLowerCase();
+      const position = p.position?.toLowerCase() || "";
+      return name.includes(query) || position.includes(query);
+    });
+  }, [squad, squadSearch]);
+
+  const squadPerPage = 20;
+  const paginatedSquad = useMemo(() => {
+    const start = (squadPage - 1) * squadPerPage;
+    return filteredSquad.slice(start, start + squadPerPage);
+  }, [filteredSquad, squadPage]);
+  const squadTotalPages = Math.ceil(filteredSquad.length / squadPerPage);
+
+  const handleSquadSearchChange = (value: string) => {
+    setSquadSearch(value);
+    setSquadPage(1);
+  };
+
+  // Pagination logic for Fixtures (10 items/page)
+  const fixturesPerPage = 10;
+  const paginatedFixtures = useMemo(() => {
+    const start = (fixturesPage - 1) * fixturesPerPage;
+    return fixtures.slice(start, start + fixturesPerPage);
+  }, [fixtures, fixturesPage]);
+  const fixturesTotalPages = Math.ceil(fixtures.length / fixturesPerPage);
+
+  // Pagination logic for Results (10 items/page)
+  const resultsPerPage = 10;
+  const paginatedResults = useMemo(() => {
+    const start = (resultsPage - 1) * resultsPerPage;
+    return results.slice(start, start + resultsPerPage);
+  }, [results, resultsPage]);
+  const resultsTotalPages = Math.ceil(results.length / resultsPerPage);
+
+  // Pagination logic for Staff (10 items/page)
+  const staffPerPage = 10;
+  const paginatedStaff = useMemo(() => {
+    if (!coaches) return [];
+    const start = (staffPage - 1) * staffPerPage;
+    return coaches.slice(start, start + staffPerPage);
+  }, [coaches, staffPage]);
+  const staffTotalPages = Math.ceil((coaches?.length || 0) / staffPerPage);
+
+  // Pagination logic for History (10 items/page)
+  const historyPerPage = 10;
+  const paginatedHistory = useMemo(() => {
+    if (!clubSeasons) return [];
+    const start = (historyPage - 1) * historyPerPage;
+    return clubSeasons.slice(start, start + historyPerPage);
+  }, [clubSeasons, historyPage]);
+  const historyTotalPages = Math.ceil((clubSeasons?.length || 0) / historyPerPage);
 
   return (
     <div>
@@ -146,15 +215,27 @@ export default function ClubDetailPage() {
           </TabsContent>
 
           {/* SQUAD */}
-          <TabsContent value="squad" className="mt-4">
+          <TabsContent value="squad" className="mt-4 space-y-4">
+            {/* Search bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search squad by name or position..."
+                value={squadSearch}
+                onChange={(e) => handleSquadSearchChange(e.target.value)}
+                className="pl-9 h-10"
+              />
+            </div>
+
             {squadLoading && (
               <div className="space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded" />)}
               </div>
             )}
-            {!squadLoading && squad && squad.length === 0 && (
+            {!squadLoading && squad && filteredSquad.length === 0 && (
               <div className="bg-card rounded-xl border border-border p-6 text-center text-sm text-muted-foreground">
-                Squad data coming soon.
+                {squadSearch ? `No players found matching "${squadSearch}"` : "Squad data coming soon."}
               </div>
             )}
             {!squadLoading && !squad && (
@@ -163,24 +244,56 @@ export default function ClubDetailPage() {
                 <Button variant="outline" size="sm" onClick={() => refetchSquad()}>Try again</Button>
               </div>
             )}
-            {squad && squad.length > 0 && (
-              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
-                {squad.map((p) => (
-                  <Link key={p.id} href={`/players/${p.id}`} className="flex items-center gap-3 p-3 hover:bg-secondary/40">
-                    <PlayerAvatar name={p.name} photoUrl={p.photoUrl} size={36} ring={false} />
-                    <span className="w-8 text-center font-display font-bold text-muted-foreground text-sm">{p.number || "—"}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold truncate">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">{p.position} · {p.nationality}</div>
+            {paginatedSquad.length > 0 && (
+              <>
+                <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
+                  {paginatedSquad.map((p) => (
+                    <Link key={p.id} href={`/players/${p.id}`} className="flex items-center gap-3 p-3 hover:bg-secondary/40">
+                      <PlayerAvatar name={p.name} photoUrl={p.photoUrl} size={36} ring={false} />
+                      <span className="w-8 text-center font-display font-bold text-muted-foreground text-sm">{p.number || "—"}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold truncate">{p.name}</div>
+                        <div className="text-xs text-muted-foreground">{p.position} · {p.nationality}</div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+
+                {/* Pagination controls */}
+                {squadTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((squadPage - 1) * squadPerPage) + 1}–{Math.min(squadPage * squadPerPage, filteredSquad.length)} of {filteredSquad.length}
                     </div>
-                  </Link>
-                ))}
-              </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSquadPage((p) => Math.max(1, p - 1))}
+                        disabled={squadPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="text-xs font-medium px-3 py-1.5">
+                        Page {squadPage} of {squadTotalPages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSquadPage((p) => Math.min(squadTotalPages, p + 1))}
+                        disabled={squadPage === squadTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
           {/* FIXTURES */}
-          <TabsContent value="fixtures" className="mt-4">
+          <TabsContent value="fixtures" className="mt-4 space-y-4">
             {matchesLoading && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -189,10 +302,42 @@ export default function ClubDetailPage() {
             {!matchesLoading && fixtures.length === 0 && (
               <div className="text-center text-sm text-muted-foreground py-8">No upcoming fixtures.</div>
             )}
-            {fixtures.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {fixtures.map((m) => <MatchCard key={m.id} match={m} />)}
-              </div>
+            {paginatedFixtures.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {paginatedFixtures.map((m) => <MatchCard key={m.id} match={m} />)}
+                </div>
+
+                {/* Pagination controls */}
+                {fixturesTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((fixturesPage - 1) * fixturesPerPage) + 1}–{Math.min(fixturesPage * fixturesPerPage, fixtures.length)} of {fixtures.length}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFixturesPage((p) => Math.max(1, p - 1))}
+                        disabled={fixturesPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="text-xs font-medium px-3 py-1.5">
+                        Page {fixturesPage} of {fixturesTotalPages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setFixturesPage((p) => Math.min(fixturesTotalPages, p + 1))}
+                        disabled={fixturesPage === fixturesTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             {!matchesLoading && !allMatches && (
               <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
@@ -203,7 +348,7 @@ export default function ClubDetailPage() {
           </TabsContent>
 
           {/* RESULTS */}
-          <TabsContent value="results" className="mt-4">
+          <TabsContent value="results" className="mt-4 space-y-4">
             {matchesLoading && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -212,10 +357,42 @@ export default function ClubDetailPage() {
             {!matchesLoading && results.length === 0 && (
               <div className="text-center text-sm text-muted-foreground py-8">No results yet.</div>
             )}
-            {results.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {results.map((m) => <MatchCard key={m.id} match={m} />)}
-              </div>
+            {paginatedResults.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {paginatedResults.map((m) => <MatchCard key={m.id} match={m} />)}
+                </div>
+
+                {/* Pagination controls */}
+                {resultsTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((resultsPage - 1) * resultsPerPage) + 1}–{Math.min(resultsPage * resultsPerPage, results.length)} of {results.length}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResultsPage((p) => Math.max(1, p - 1))}
+                        disabled={resultsPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="text-xs font-medium px-3 py-1.5">
+                        Page {resultsPage} of {resultsTotalPages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResultsPage((p) => Math.min(resultsTotalPages, p + 1))}
+                        disabled={resultsPage === resultsTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
             {!matchesLoading && !allMatches && (
               <div className="bg-card rounded-xl border border-border p-6 text-center space-y-3">
@@ -226,7 +403,7 @@ export default function ClubDetailPage() {
           </TabsContent>
 
           {/* STAFF */}
-          <TabsContent value="staff" className="mt-4">
+          <TabsContent value="staff" className="mt-4 space-y-4">
             {coachesLoading && (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 rounded" />)}
@@ -241,34 +418,66 @@ export default function ClubDetailPage() {
                 <Button variant="outline" size="sm" onClick={() => refetchCoaches()}>Try again</Button>
               </div>
             )}
-            {coaches && coaches.length > 0 && (
-              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
-                {coaches.map((c) => (
-                  <Link
-                    key={c.coachId}
-                    href={`/coaches/${c.coachId}`}
-                    className="flex items-center gap-3 p-3 hover:bg-secondary/40"
-                  >
-                    <PlayerAvatar
-                      name={`${c.firstName} ${c.lastName}`}
-                      photoUrl={c.photoUrl ?? undefined}
-                      size={36}
-                      ring={false}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold truncate">
-                        {c.firstName} {c.lastName}
+            {paginatedStaff.length > 0 && (
+              <>
+                <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border">
+                  {paginatedStaff.map((c) => (
+                    <Link
+                      key={c.coachId}
+                      href={`/coaches/${c.coachId}`}
+                      className="flex items-center gap-3 p-3 hover:bg-secondary/40"
+                    >
+                      <PlayerAvatar
+                        name={`${c.firstName} ${c.lastName}`}
+                        photoUrl={c.photoUrl ?? undefined}
+                        size={36}
+                        ring={false}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold truncate">
+                          {c.firstName} {c.lastName}
+                        </div>
+                        {c.nationality && (
+                          <div className="text-xs text-muted-foreground">{c.nationality}</div>
+                        )}
                       </div>
-                      {c.nationality && (
-                        <div className="text-xs text-muted-foreground">{c.nationality}</div>
-                      )}
+                      <span className={roleBadgeClass(c.role)}>
+                        {c.role.replace(/_/g, " ")}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+
+                {/* Pagination controls */}
+                {staffTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((staffPage - 1) * staffPerPage) + 1}–{Math.min(staffPage * staffPerPage, coaches?.length || 0)} of {coaches?.length || 0}
                     </div>
-                    <span className={roleBadgeClass(c.role)}>
-                      {c.role.replace(/_/g, " ")}
-                    </span>
-                  </Link>
-                ))}
-              </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setStaffPage((p) => Math.max(1, p - 1))}
+                        disabled={staffPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="text-xs font-medium px-3 py-1.5">
+                        Page {staffPage} of {staffTotalPages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setStaffPage((p) => Math.min(staffTotalPages, p + 1))}
+                        disabled={staffPage === staffTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
 
@@ -331,7 +540,7 @@ export default function ClubDetailPage() {
           </TabsContent>
 
           {/* HISTORY */}
-          <TabsContent value="history" className="mt-4">
+          <TabsContent value="history" className="mt-4 space-y-4">
             {seasonsLoading && (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
@@ -346,46 +555,78 @@ export default function ClubDetailPage() {
             {clubSeasons && clubSeasons.length === 0 && (
               <div className="text-center text-sm text-muted-foreground py-8">No season history yet.</div>
             )}
-            {clubSeasons && clubSeasons.length > 0 && (
-              <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-x-auto">
-                <table className="w-full text-sm min-w-[560px]">
-                  <thead className="bg-secondary/60 text-xs text-muted-foreground uppercase tracking-wider">
-                    <tr>
-                      <th className="text-left py-2 px-3">Season</th>
-                      <th className="text-left py-2 px-3">League</th>
-                      <th className="text-center py-2 px-2">Pos</th>
-                      <th className="text-center py-2 px-2">P</th>
-                      <th className="text-center py-2 px-2">W</th>
-                      <th className="text-center py-2 px-2">D</th>
-                      <th className="text-center py-2 px-2">L</th>
-                      <th className="text-center py-2 px-2">GF</th>
-                      <th className="text-center py-2 px-2">GA</th>
-                      <th className="text-center py-2 px-3">Pts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {clubSeasons.map((s) => (
-                      <tr key={s.seasonId} className="border-t border-border hover:bg-secondary/40 transition-colors">
-                        <td className="py-2 px-3 font-medium">{s.seasonName}</td>
-                        <td className="py-2 px-3 text-muted-foreground text-xs">{s.leagueName}</td>
-                        <td className={cn(
-                          "text-center tabular-nums font-bold",
-                          s.position === 1 && "text-primary",
-                        )}>
-                          {s.position}
-                        </td>
-                        <td className="text-center tabular-nums">{s.played}</td>
-                        <td className="text-center tabular-nums">{s.won}</td>
-                        <td className="text-center tabular-nums">{s.drawn}</td>
-                        <td className="text-center tabular-nums">{s.lost}</td>
-                        <td className="text-center tabular-nums">{s.goalsFor}</td>
-                        <td className="text-center tabular-nums">{s.goalsAgainst}</td>
-                        <td className="text-center font-display font-bold tabular-nums">{s.points}</td>
+            {paginatedHistory.length > 0 && (
+              <>
+                <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] overflow-x-auto">
+                  <table className="w-full text-sm min-w-[560px]">
+                    <thead className="bg-secondary/60 text-xs text-muted-foreground uppercase tracking-wider">
+                      <tr>
+                        <th className="text-left py-2 px-3">Season</th>
+                        <th className="text-left py-2 px-3">League</th>
+                        <th className="text-center py-2 px-2">Pos</th>
+                        <th className="text-center py-2 px-2">P</th>
+                        <th className="text-center py-2 px-2">W</th>
+                        <th className="text-center py-2 px-2">D</th>
+                        <th className="text-center py-2 px-2">L</th>
+                        <th className="text-center py-2 px-2">GF</th>
+                        <th className="text-center py-2 px-2">GA</th>
+                        <th className="text-center py-2 px-3">Pts</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {paginatedHistory.map((s) => (
+                        <tr key={s.seasonId} className="border-t border-border hover:bg-secondary/40 transition-colors">
+                          <td className="py-2 px-3 font-medium">{s.seasonName}</td>
+                          <td className="py-2 px-3 text-muted-foreground text-xs">{s.leagueName}</td>
+                          <td className={cn(
+                            "text-center tabular-nums font-bold",
+                            s.position === 1 && "text-primary",
+                          )}>
+                            {s.position}
+                          </td>
+                          <td className="text-center tabular-nums">{s.played}</td>
+                          <td className="text-center tabular-nums">{s.won}</td>
+                          <td className="text-center tabular-nums">{s.drawn}</td>
+                          <td className="text-center tabular-nums">{s.lost}</td>
+                          <td className="text-center tabular-nums">{s.goalsFor}</td>
+                          <td className="text-center tabular-nums">{s.goalsAgainst}</td>
+                          <td className="text-center font-display font-bold tabular-nums">{s.points}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination controls */}
+                {historyTotalPages > 1 && (
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <div className="text-xs text-muted-foreground">
+                      Showing {((historyPage - 1) * historyPerPage) + 1}–{Math.min(historyPage * historyPerPage, clubSeasons?.length || 0)} of {clubSeasons?.length || 0}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                        disabled={historyPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="text-xs font-medium px-3 py-1.5">
+                        Page {historyPage} of {historyTotalPages}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                        disabled={historyPage === historyTotalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </TabsContent>
         </Tabs>
