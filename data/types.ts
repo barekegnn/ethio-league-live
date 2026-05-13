@@ -77,6 +77,8 @@ export interface Match {
   awayClubName?: string;
   homeClubLogo?: string;
   awayClubLogo?: string;
+  // League display name from the API
+  leagueName?: string;
 }
 
 export interface StandingsRow {

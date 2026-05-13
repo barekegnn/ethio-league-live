@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useMatches } from "@/lib/api/hooks/matches";
+import { useLeagues } from "@/lib/api/hooks/leagues";
 import { MatchCard } from "@/components/MatchCard";
 import { ClubCrest } from "@/components/ClubCrest";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api/client";
 import type { Match } from "@/data/types";
 
 type Filter = "live" | "today" | "upcoming" | "results";
@@ -116,6 +118,48 @@ function MatchRow({ m }: { m: Match }) {
 export default function MatchesPage() {
   const [filter, setFilter] = useState<Filter>("live");
   const { data: allMatches, isLoading, error, refetch } = useMatches();
+  const { data: leagues } = useLeagues();
+  const [seasonToLeagueNameMap, setSeasonToLeagueNameMap] = useState<Map<string, string>>(new Map());
+
+  // Create a simple league ID → league name map as fallback
+  const leagueIdToNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    leagues?.forEach((league) => {
+      map.set(league.id, league.name);
+    });
+    return map;
+  }, [leagues]);
+
+  // Fetch season data to build seasonId → leagueName map
+  useEffect(() => {
+    if (!allMatches || allMatches.length === 0) return;
+
+    // Get unique season IDs from all matches
+    const uniqueSeasonIds = Array.from(new Set(allMatches.map(m => m.leagueId)));
+
+    // Fetch season data for each unique season ID
+    Promise.all(
+      uniqueSeasonIds.map(async (seasonId) => {
+        try {
+          const seasonData = await apiFetch<{
+            id: string;
+            name: string;
+            league: { id: string; name: string };
+          }>(`/api/fan/seasons/${seasonId}`);
+          return { seasonId, leagueName: seasonData.league.name };
+        } catch (err) {
+          console.error(`Failed to fetch season ${seasonId}:`, err);
+          return { seasonId, leagueName: "Unknown League" };
+        }
+      })
+    ).then((results) => {
+      const map = new Map<string, string>();
+      results.forEach(({ seasonId, leagueName }) => {
+        map.set(seasonId, leagueName);
+      });
+      setSeasonToLeagueNameMap(map);
+    });
+  }, [allMatches]);
 
   // ── Derived lists ──────────────────────────────────────────────────────────
   const live = useMemo(
@@ -141,37 +185,72 @@ export default function MatchesPage() {
     [allMatches]
   );
 
-  // ── Group live by league (leagueId = seasonId from API) ───────────────────
-  const liveByLeague = useMemo(() => {
-    const map = new Map<string, Match[]>();
+  // ── Group live by league → round ──────────────────────────────────────────
+  const liveByLeagueAndRound = useMemo(() => {
+    const leagueMap = new Map<string, { name: string; rounds: Map<number, Match[]> }>();
     for (const m of live) {
-      if (!map.has(m.leagueId)) map.set(m.leagueId, []);
-      map.get(m.leagueId)!.push(m);
+      if (!leagueMap.has(m.leagueId)) {
+        leagueMap.set(m.leagueId, {
+          // Use embedded league name from match, or season map, or fall back to league map lookup
+          name: m.leagueName || seasonToLeagueNameMap.get(m.leagueId) || leagueIdToNameMap.get(m.leagueId) || "Unknown League",
+          rounds: new Map(),
+        });
+      }
+      const leagueData = leagueMap.get(m.leagueId)!;
+      const round = m.matchday ?? 0;
+      if (!leagueData.rounds.has(round)) leagueData.rounds.set(round, []);
+      leagueData.rounds.get(round)!.push(m);
     }
-    return Array.from(map.entries());
-  }, [live]);
+    return Array.from(leagueMap.entries()).map(([leagueId, data]) => ({
+      leagueId,
+      leagueName: data.name,
+      rounds: Array.from(data.rounds.entries()).sort(([a], [b]) => a - b),
+    }));
+  }, [live, leagueIdToNameMap, seasonToLeagueNameMap]);
 
-  // ── Group upcoming by round ───────────────────────────────────────────────
-  const upcomingByRound = useMemo(() => {
-    const map = new Map<number, Match[]>();
+  // ── Group upcoming by league → round ──────────────────────────────────────
+  const upcomingByLeagueAndRound = useMemo(() => {
+    const leagueMap = new Map<string, { name: string; rounds: Map<number, Match[]> }>();
     for (const m of upcoming) {
-      const r = m.matchday ?? 0;
-      if (!map.has(r)) map.set(r, []);
-      map.get(r)!.push(m);
+      if (!leagueMap.has(m.leagueId)) {
+        leagueMap.set(m.leagueId, {
+          name: m.leagueName || seasonToLeagueNameMap.get(m.leagueId) || leagueIdToNameMap.get(m.leagueId) || "Unknown League",
+          rounds: new Map(),
+        });
+      }
+      const leagueData = leagueMap.get(m.leagueId)!;
+      const round = m.matchday ?? 0;
+      if (!leagueData.rounds.has(round)) leagueData.rounds.set(round, []);
+      leagueData.rounds.get(round)!.push(m);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a - b);
-  }, [upcoming]);
+    return Array.from(leagueMap.entries()).map(([leagueId, data]) => ({
+      leagueId,
+      leagueName: data.name,
+      rounds: Array.from(data.rounds.entries()).sort(([a], [b]) => a - b),
+    }));
+  }, [upcoming, seasonToLeagueNameMap, leagueIdToNameMap]);
 
-  // ── Group results by round ────────────────────────────────────────────────
-  const resultsByRound = useMemo(() => {
-    const map = new Map<number, Match[]>();
+  // ── Group results by league → round ───────────────────────────────────────
+  const resultsByLeagueAndRound = useMemo(() => {
+    const leagueMap = new Map<string, { name: string; rounds: Map<number, Match[]> }>();
     for (const m of results) {
-      const r = m.matchday ?? 0;
-      if (!map.has(r)) map.set(r, []);
-      map.get(r)!.push(m);
+      if (!leagueMap.has(m.leagueId)) {
+        leagueMap.set(m.leagueId, {
+          name: m.leagueName || seasonToLeagueNameMap.get(m.leagueId) || leagueIdToNameMap.get(m.leagueId) || "Unknown League",
+          rounds: new Map(),
+        });
+      }
+      const leagueData = leagueMap.get(m.leagueId)!;
+      const round = m.matchday ?? 0;
+      if (!leagueData.rounds.has(round)) leagueData.rounds.set(round, []);
+      leagueData.rounds.get(round)!.push(m);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => b - a); // most recent first
-  }, [results]);
+    return Array.from(leagueMap.entries()).map(([leagueId, data]) => ({
+      leagueId,
+      leagueName: data.name,
+      rounds: Array.from(data.rounds.entries()).sort(([a], [b]) => b - a), // most recent first
+    }));
+  }, [results, seasonToLeagueNameMap, leagueIdToNameMap]);
 
   const liveCount = live.length;
 
@@ -211,7 +290,7 @@ export default function MatchesPage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            LIVE — collapsible by league
+            LIVE — collapsible by league → round
         ══════════════════════════════════════════════════════════════════ */}
         {!isLoading && !error && (
           <TabsContent value="live" className="mt-4 space-y-2">
@@ -219,25 +298,42 @@ export default function MatchesPage() {
               <div className="bg-card rounded-xl border border-border p-10 text-center text-sm text-muted-foreground">
                 No live matches right now.
               </div>
-            ) : liveByLeague.length === 1 ? (
-              // Only one league — show matches directly without collapsible
+            ) : liveByLeagueAndRound.length === 1 && liveByLeagueAndRound[0].rounds.length === 1 ? (
+              // Only one league and one round — show matches directly without collapsible
               <div className="bg-card rounded-xl border border-border shadow-[var(--shadow-card)] divide-y divide-border overflow-hidden">
-                {liveByLeague[0][1].map((m) => <MatchRow key={m.id} m={m} />)}
+                {liveByLeagueAndRound[0].rounds[0][1].map((m) => <MatchRow key={m.id} m={m} />)}
               </div>
             ) : (
-              // Multiple leagues — each in its own collapsible
-              liveByLeague.map(([leagueId, matches], i) => (
-                <CollapsibleSection
-                  key={leagueId}
-                  title={`League ${i + 1}`}
-                  badge={`${matches.length} live`}
-                  defaultOpen={i === 0}
-                >
-                  <div className="divide-y divide-border">
-                    {matches.map((m) => <MatchRow key={m.id} m={m} />)}
-                  </div>
-                </CollapsibleSection>
-              ))
+              // Multiple leagues or rounds — organize by league (collapsible) → round (collapsible)
+              liveByLeagueAndRound.map(({ leagueId, leagueName, rounds }, leagueIdx) => {
+                const totalMatches = rounds.reduce((sum, [, matches]) => sum + matches.length, 0);
+                
+                return (
+                  <CollapsibleSection
+                    key={leagueId}
+                    title={leagueName}
+                    badge={`${totalMatches} live`}
+                    defaultOpen={leagueIdx === 0}
+                  >
+                    <div className="space-y-0">
+                      {/* Rounds within this league */}
+                      {rounds.map(([round, matches], roundIdx) => (
+                        <div key={`${leagueId}-${round}`} className="border-t border-border first:border-t-0">
+                          <CollapsibleSection
+                            title={`Round ${round}`}
+                            badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
+                            defaultOpen={roundIdx === 0}
+                          >
+                            <div className="divide-y divide-border">
+                              {matches.map((m) => <MatchRow key={m.id} m={m} />)}
+                            </div>
+                          </CollapsibleSection>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleSection>
+                );
+              })
             )}
           </TabsContent>
         )}
@@ -260,55 +356,89 @@ export default function MatchesPage() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            UPCOMING — collapsible by round
-            First round open by default, rest collapsed
+            UPCOMING — collapsible by league → round
+            First round of first league open by default, rest collapsed
         ══════════════════════════════════════════════════════════════════ */}
         {!isLoading && !error && (
           <TabsContent value="upcoming" className="mt-4 space-y-2">
-            {upcomingByRound.length === 0 ? (
+            {upcomingByLeagueAndRound.length === 0 ? (
               <div className="text-center text-muted-foreground py-12">No upcoming fixtures.</div>
             ) : (
-              upcomingByRound.map(([round, matches], i) => (
-                <CollapsibleSection
-                  key={round}
-                  title={`Round ${round}`}
-                  badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
-                  defaultOpen={i === 0}
-                >
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 divide-border">
-                    {matches.map((m) => (
-                      <div key={m.id} className="p-2 sm:border-r border-border last:border-r-0">
-                        <MatchCard match={m} className="border-0 shadow-none hover:bg-secondary/30" />
-                      </div>
-                    ))}
-                  </div>
-                </CollapsibleSection>
-              ))
+              upcomingByLeagueAndRound.map(({ leagueId, leagueName, rounds }, leagueIdx) => {
+                const totalMatches = rounds.reduce((sum, [, matches]) => sum + matches.length, 0);
+                
+                return (
+                  <CollapsibleSection
+                    key={leagueId}
+                    title={leagueName}
+                    badge={`${totalMatches} match${totalMatches !== 1 ? "es" : ""}`}
+                    defaultOpen={leagueIdx === 0}
+                  >
+                    <div className="space-y-0">
+                      {/* Rounds within this league */}
+                      {rounds.map(([round, matches], roundIdx) => (
+                        <div key={`${leagueId}-${round}`} className="border-t border-border first:border-t-0">
+                          <CollapsibleSection
+                            title={`Round ${round}`}
+                            badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
+                            defaultOpen={roundIdx === 0}
+                          >
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-0 divide-y sm:divide-y-0 divide-border">
+                              {matches.map((m) => (
+                                <div key={m.id} className="p-2 sm:border-r border-border last:border-r-0">
+                                  <MatchCard match={m} className="border-0 shadow-none hover:bg-secondary/30" />
+                                </div>
+                              ))}
+                            </div>
+                          </CollapsibleSection>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleSection>
+                );
+              })
             )}
           </TabsContent>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════
-            RESULTS — collapsible by round
-            Latest round open by default, older rounds collapsed
+            RESULTS — collapsible by league → round
+            Latest round of first league open by default, older rounds collapsed
         ══════════════════════════════════════════════════════════════════ */}
         {!isLoading && !error && (
           <TabsContent value="results" className="mt-4 space-y-2">
-            {resultsByRound.length === 0 ? (
+            {resultsByLeagueAndRound.length === 0 ? (
               <div className="text-center text-muted-foreground py-12">No results yet.</div>
             ) : (
-              resultsByRound.map(([round, matches], i) => (
-                <CollapsibleSection
-                  key={round}
-                  title={`Round ${round}`}
-                  badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
-                  defaultOpen={i === 0}
-                >
-                  <div className="divide-y divide-border">
-                    {matches.map((m) => <MatchRow key={m.id} m={m} />)}
-                  </div>
-                </CollapsibleSection>
-              ))
+              resultsByLeagueAndRound.map(({ leagueId, leagueName, rounds }, leagueIdx) => {
+                const totalMatches = rounds.reduce((sum, [, matches]) => sum + matches.length, 0);
+                
+                return (
+                  <CollapsibleSection
+                    key={leagueId}
+                    title={leagueName}
+                    badge={`${totalMatches} match${totalMatches !== 1 ? "es" : ""}`}
+                    defaultOpen={leagueIdx === 0}
+                  >
+                    <div className="space-y-0">
+                      {/* Rounds within this league */}
+                      {rounds.map(([round, matches], roundIdx) => (
+                        <div key={`${leagueId}-${round}`} className="border-t border-border first:border-t-0">
+                          <CollapsibleSection
+                            title={`Round ${round}`}
+                            badge={`${matches.length} match${matches.length !== 1 ? "es" : ""}`}
+                            defaultOpen={roundIdx === 0}
+                          >
+                            <div className="divide-y divide-border">
+                              {matches.map((m) => <MatchRow key={m.id} m={m} />)}
+                            </div>
+                          </CollapsibleSection>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleSection>
+                );
+              })
             )}
           </TabsContent>
         )}

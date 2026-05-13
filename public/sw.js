@@ -1,14 +1,9 @@
 // Ethio-League Live — Service Worker
 // Provides offline support and caching for the PWA
 
-const CACHE_NAME = 'ethio-league-v1';
+const CACHE_NAME = 'ethio-league-v2'; // Bumped version to clear old cache
 const STATIC_ASSETS = [
   '/',
-  '/matches',
-  '/leagues',
-  '/clubs',
-  '/players',
-  '/ratings',
   '/offline',
 ];
 
@@ -38,7 +33,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first for API calls, cache-first for static assets
+// Fetch: network-first for everything except offline fallback
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -47,7 +42,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (!url.protocol.startsWith('http')) return;
 
-  // API calls: network-first, no caching (always fresh data)
+  // API calls: network-only (always fresh data, no caching)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request).catch(() => {
@@ -60,42 +55,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests: network-first, fall back to cached page or offline page
+  // Navigation requests: network-first, fall back to offline page only
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
-        .then((response) => {
-          // Cache successful navigation responses
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
         .catch(() => {
-          // Try cache first, then offline fallback
-          return caches.match(request).then(
-            (cached) => cached || caches.match('/offline') || new Response(
-              '<html><body><h1>You are offline</h1><p>Please check your internet connection and try again.</p></body></html>',
-              { headers: { 'Content-Type': 'text/html' } }
-            )
+          // Only serve offline page if network fails
+          return caches.match('/offline') || new Response(
+            '<html><body><h1>You are offline</h1><p>Please check your internet connection and try again.</p></body></html>',
+            { headers: { 'Content-Type': 'text/html' } }
           );
         })
     );
     return;
   }
 
-  // Static assets (JS, CSS, images, fonts): cache-first
+  // Static assets (JS, CSS, images, fonts): network-first with cache fallback
   event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
+    fetch(request)
+      .then((response) => {
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
         }
         return response;
-      });
-    })
+      })
+      .catch(() => {
+        return caches.match(request);
+      })
   );
 });

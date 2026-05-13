@@ -73,7 +73,7 @@ export default function RootLayout({
         {/* Splash screen color */}
         <meta name="theme-color" content="#16a34a" />
       </head>
-      <body className="min-h-screen bg-background flex flex-col">
+      <body className="min-h-screen bg-background flex flex-col" suppressHydrationWarning>
         <Providers>
           <ServiceWorkerRegistration />
           <PWAInstallPrompt />

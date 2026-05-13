@@ -7,7 +7,7 @@ import { ClubCrest } from "@/components/ClubCrest";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Trophy, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowRight, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMatches } from "@/lib/api/hooks/matches";
 import { useLeagues, useLeagueSeasons } from "@/lib/api/hooks/leagues";
@@ -89,7 +89,6 @@ function MatchesWidget({ allMatches, isLoading, error, refetch }: {
   // Auto-select: live if any, else upcoming, else results
   const defaultFilter: Filter = live.length > 0 ? "live" : upcoming.length > 0 ? "upcoming" : "results";
   const [filter, setFilter] = useState<Filter>(defaultFilter);
-  const [showAll, setShowAll] = useState(false);
 
   const PREVIEW = 6;
 
@@ -104,8 +103,8 @@ function MatchesWidget({ allMatches, isLoading, error, refetch }: {
     ? [...upcoming].sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff))
     : latestRoundMatches;
 
-  const displayed = showAll ? source : source.slice(0, PREVIEW);
-  const hasMore = source.length > PREVIEW;
+  // Always show only PREVIEW items - no expand/collapse
+  const displayed = source.slice(0, PREVIEW);
 
   const latestRound = useMemo(() => {
     if (recent.length === 0) return null;
@@ -132,7 +131,7 @@ function MatchesWidget({ allMatches, isLoading, error, refetch }: {
           return (
             <button
               key={f}
-              onClick={() => { setFilter(f); setShowAll(false); }}
+              onClick={() => setFilter(f)}
               className={cn(
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0",
                 isActive
@@ -197,20 +196,6 @@ function MatchesWidget({ allMatches, isLoading, error, refetch }: {
           <div className="divide-y divide-border">
             {displayed.map((m) => <MatchRow key={m.id} m={m} />)}
           </div>
-        )}
-
-        {/* Show more / less toggle */}
-        {!isLoading && !error && hasMore && (
-          <button
-            onClick={() => setShowAll((v) => !v)}
-            className="w-full flex items-center justify-center gap-1 py-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-secondary/40 transition-colors border-t border-border"
-          >
-            {showAll ? (
-              <><ChevronUp className="w-3.5 h-3.5" /> Show less</>
-            ) : (
-              <><ChevronDown className="w-3.5 h-3.5" /> {source.length - PREVIEW} more {filter === "results" ? "results" : "matches"}</>
-            )}
-          </button>
         )}
       </div>
     </section>
@@ -394,7 +379,7 @@ export default function HomePage() {
                 <h3 className="font-display font-bold text-base sm:text-lg leading-snug mb-1">{n.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{n.excerpt}</p>
                 <time className="block mt-2 text-xs text-muted-foreground">
-                  {new Date(n.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {new Date(n.publishedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </time>
               </article>
             ))}

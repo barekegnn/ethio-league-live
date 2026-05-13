@@ -419,6 +419,7 @@ export function adaptMatch(raw: RawMatch): Match {
     awayClubName: raw.awayClub?.name ?? undefined,
     homeClubLogo: nullToUndefined(raw.homeClub?.logoUrl),
     awayClubLogo: nullToUndefined(raw.awayClub?.logoUrl),
+    leagueName: raw.season?.league?.name ?? undefined,
   };
 }
 
