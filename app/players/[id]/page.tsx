@@ -30,6 +30,26 @@ export default function PlayerDetailPage() {
   const { data: seasons } = usePlayerSeasons(player?.id);
   const { data: matches, isLoading: matchesLoading, refetch: refetchMatches } = usePlayerMatches(player?.id);
 
+  // ── All useMemo hooks MUST be before any early returns (Rules of Hooks) ──
+
+  const careerPerPage = 10;
+  const paginatedCareer = useMemo(() => {
+    if (!seasons) return [];
+    const start = (careerPage - 1) * careerPerPage;
+    return seasons.slice(start, start + careerPerPage);
+  }, [seasons, careerPage]);
+  const careerTotalPages = Math.ceil((seasons?.length || 0) / careerPerPage);
+
+  const matchesPerPage = 15;
+  const paginatedMatches = useMemo(() => {
+    if (!matches) return [];
+    const start = (matchesPage - 1) * matchesPerPage;
+    return matches.slice(start, start + matchesPerPage);
+  }, [matches, matchesPage]);
+  const matchesTotalPages = Math.ceil((matches?.length || 0) / matchesPerPage);
+
+  // ── Early returns AFTER all hooks ──
+
   if (error instanceof NotFoundError) {
     notFound();
   }
@@ -70,24 +90,6 @@ export default function PlayerDetailPage() {
     { label: "Yellow", value: stats?.totalYellowCards ?? player.yellow },
     { label: "Red", value: stats?.totalRedCards ?? player.red },
   ];
-
-  // Pagination logic for Career (10 items/page)
-  const careerPerPage = 10;
-  const paginatedCareer = useMemo(() => {
-    if (!seasons) return [];
-    const start = (careerPage - 1) * careerPerPage;
-    return seasons.slice(start, start + careerPerPage);
-  }, [seasons, careerPage]);
-  const careerTotalPages = Math.ceil((seasons?.length || 0) / careerPerPage);
-
-  // Pagination logic for Matches (15 items/page)
-  const matchesPerPage = 15;
-  const paginatedMatches = useMemo(() => {
-    if (!matches) return [];
-    const start = (matchesPage - 1) * matchesPerPage;
-    return matches.slice(start, start + matchesPerPage);
-  }, [matches, matchesPage]);
-  const matchesTotalPages = Math.ceil((matches?.length || 0) / matchesPerPage);
 
   return (
     <div>

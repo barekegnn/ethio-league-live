@@ -49,6 +49,74 @@ export default function ClubDetailPage() {
   const { data: clubStats, isLoading: statsLoading, refetch: refetchStats } = useClubStats(club?.id);
   const { data: clubSeasons, isLoading: seasonsLoading, refetch: refetchSeasons } = useClubSeasons(club?.id);
 
+  // ── All useMemo hooks MUST be before any early returns (Rules of Hooks) ──
+
+  const fixtures = useMemo(
+    () => (allMatches ?? []).filter((m) => m.status !== "completed")
+      .sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff)),
+    [allMatches]
+  );
+  const results = useMemo(
+    () => (allMatches ?? []).filter((m) => m.status === "completed")
+      .sort((a, b) => +new Date(b.kickoff) - +new Date(a.kickoff)),
+    [allMatches]
+  );
+
+  const filteredSquad = useMemo(() => {
+    if (!squad) return [];
+    if (!squadSearch.trim()) return squad;
+    const query = squadSearch.toLowerCase();
+    return squad.filter((p) => {
+      const name = p.name.toLowerCase();
+      const position = p.position?.toLowerCase() || "";
+      return name.includes(query) || position.includes(query);
+    });
+  }, [squad, squadSearch]);
+
+  const squadPerPage = 20;
+  const paginatedSquad = useMemo(() => {
+    const start = (squadPage - 1) * squadPerPage;
+    return filteredSquad.slice(start, start + squadPerPage);
+  }, [filteredSquad, squadPage]);
+  const squadTotalPages = Math.ceil(filteredSquad.length / squadPerPage);
+
+  const fixturesPerPage = 10;
+  const paginatedFixtures = useMemo(() => {
+    const start = (fixturesPage - 1) * fixturesPerPage;
+    return fixtures.slice(start, start + fixturesPerPage);
+  }, [fixtures, fixturesPage]);
+  const fixturesTotalPages = Math.ceil(fixtures.length / fixturesPerPage);
+
+  const resultsPerPage = 10;
+  const paginatedResults = useMemo(() => {
+    const start = (resultsPage - 1) * resultsPerPage;
+    return results.slice(start, start + resultsPerPage);
+  }, [results, resultsPage]);
+  const resultsTotalPages = Math.ceil(results.length / resultsPerPage);
+
+  const staffPerPage = 10;
+  const paginatedStaff = useMemo(() => {
+    if (!coaches) return [];
+    const start = (staffPage - 1) * staffPerPage;
+    return coaches.slice(start, start + staffPerPage);
+  }, [coaches, staffPage]);
+  const staffTotalPages = Math.ceil((coaches?.length || 0) / staffPerPage);
+
+  const historyPerPage = 10;
+  const paginatedHistory = useMemo(() => {
+    if (!clubSeasons) return [];
+    const start = (historyPage - 1) * historyPerPage;
+    return clubSeasons.slice(start, start + historyPerPage);
+  }, [clubSeasons, historyPage]);
+  const historyTotalPages = Math.ceil((clubSeasons?.length || 0) / historyPerPage);
+
+  const handleSquadSearchChange = (value: string) => {
+    setSquadSearch(value);
+    setSquadPage(1);
+  };
+
+  // ── Early returns AFTER all hooks ──
+
   if (error instanceof NotFoundError) {
     notFound();
   }
@@ -77,70 +145,6 @@ export default function ClubDetailPage() {
   }
 
   if (!club) return null;
-
-  const fixtures = allMatches?.filter((m) => m.status !== "completed")
-    .sort((a, b) => +new Date(a.kickoff) - +new Date(b.kickoff)) ?? [];
-  const results = allMatches?.filter((m) => m.status === "completed")
-    .sort((a, b) => +new Date(b.kickoff) - +new Date(a.kickoff)) ?? [];
-
-  // Filter and pagination logic for Squad (20 items/page + search)
-  const filteredSquad = useMemo(() => {
-    if (!squad) return [];
-    if (!squadSearch.trim()) return squad;
-    
-    const query = squadSearch.toLowerCase();
-    return squad.filter((p) => {
-      const name = p.name.toLowerCase();
-      const position = p.position?.toLowerCase() || "";
-      return name.includes(query) || position.includes(query);
-    });
-  }, [squad, squadSearch]);
-
-  const squadPerPage = 20;
-  const paginatedSquad = useMemo(() => {
-    const start = (squadPage - 1) * squadPerPage;
-    return filteredSquad.slice(start, start + squadPerPage);
-  }, [filteredSquad, squadPage]);
-  const squadTotalPages = Math.ceil(filteredSquad.length / squadPerPage);
-
-  const handleSquadSearchChange = (value: string) => {
-    setSquadSearch(value);
-    setSquadPage(1);
-  };
-
-  // Pagination logic for Fixtures (10 items/page)
-  const fixturesPerPage = 10;
-  const paginatedFixtures = useMemo(() => {
-    const start = (fixturesPage - 1) * fixturesPerPage;
-    return fixtures.slice(start, start + fixturesPerPage);
-  }, [fixtures, fixturesPage]);
-  const fixturesTotalPages = Math.ceil(fixtures.length / fixturesPerPage);
-
-  // Pagination logic for Results (10 items/page)
-  const resultsPerPage = 10;
-  const paginatedResults = useMemo(() => {
-    const start = (resultsPage - 1) * resultsPerPage;
-    return results.slice(start, start + resultsPerPage);
-  }, [results, resultsPage]);
-  const resultsTotalPages = Math.ceil(results.length / resultsPerPage);
-
-  // Pagination logic for Staff (10 items/page)
-  const staffPerPage = 10;
-  const paginatedStaff = useMemo(() => {
-    if (!coaches) return [];
-    const start = (staffPage - 1) * staffPerPage;
-    return coaches.slice(start, start + staffPerPage);
-  }, [coaches, staffPage]);
-  const staffTotalPages = Math.ceil((coaches?.length || 0) / staffPerPage);
-
-  // Pagination logic for History (10 items/page)
-  const historyPerPage = 10;
-  const paginatedHistory = useMemo(() => {
-    if (!clubSeasons) return [];
-    const start = (historyPage - 1) * historyPerPage;
-    return clubSeasons.slice(start, start + historyPerPage);
-  }, [clubSeasons, historyPage]);
-  const historyTotalPages = Math.ceil((clubSeasons?.length || 0) / historyPerPage);
 
   return (
     <div>
