@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bell, Moon, Sun } from "lucide-react";
+import { Search, Bell, Moon, Sun, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { getFanUser } from "@/lib/fanAuth";
 
 const desktopNav = [
   { href: "/", label: "Home", exact: true },
@@ -21,6 +22,7 @@ export const TopBar = () => {
   const pathname = usePathname();
   const [dark, setDark] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [fanName, setFanName] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -29,7 +31,11 @@ export const TopBar = () => {
     document.documentElement.classList.toggle("dark", isDark);
     setDark(isDark);
     setMounted(true);
-  }, []);
+
+    // Check if a fan is logged in
+    const user = getFanUser();
+    if (user) setFanName(user.fullName.split(" ")[0]);
+  }, [pathname]); // re-check on route change so login/logout reflects immediately
 
   const toggleTheme = () => {
     const next = !dark;
@@ -81,13 +87,38 @@ export const TopBar = () => {
           <Button variant="ghost" size="icon" aria-label="Notifications">
             <Bell className="w-5 h-5" />
           </Button>
+
+          {/* Fan account button */}
+          {mounted && (
+            fanName ? (
+              <Button asChild variant="ghost" size="sm" className="hidden sm:flex items-center gap-1.5 text-primary font-semibold">
+                <Link href="/fan/profile">
+                  <UserCircle2 className="w-4 h-4" />
+                  {fanName}
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="outline" size="sm" className="hidden sm:flex">
+                <Link href="/fan/signup">Join free</Link>
+              </Button>
+            )
+          )}
+
+          {/* Mobile fan icon */}
+          {mounted && (
+            <Button asChild variant="ghost" size="icon" className="sm:hidden" aria-label="Fan account">
+              <Link href={fanName ? "/fan/profile" : "/fan/signup"}>
+                <UserCircle2 className={cn("w-5 h-5", fanName ? "text-primary" : "")} />
+              </Link>
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
             aria-label="Toggle theme"
             onClick={toggleTheme}
           >
-            {/* Render nothing until mounted to avoid server/client mismatch */}
             {mounted && (dark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />)}
           </Button>
         </div>
