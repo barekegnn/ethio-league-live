@@ -258,6 +258,24 @@ export default function FanProfilePage() {
       <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/5" onClick={handleLogout}>
         <LogOut className="w-4 h-4 mr-2" /> Sign out
       </Button>
+
+      {/* For organizations */}
+      <div className="bg-secondary/40 rounded-xl border border-border p-4 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">Are you a league or club manager?</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Register your organization to manage leagues, clubs, players, and live match events.
+          </p>
+        </div>
+        <a
+          href="https://ethioleague.vercel.app/request-organization"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-xs font-semibold text-primary hover:underline whitespace-nowrap mt-0.5"
+        >
+          Register →
+        </a>
+      </div>
     </div>
   );
 }

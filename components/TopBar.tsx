@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, Bell, Moon, Sun, UserCircle2 } from "lucide-react";
+import { Search, Bell, Moon, Sun, UserCircle2, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -79,6 +79,17 @@ export const TopBar = () => {
         </nav>
 
         <div className="ml-auto flex items-center gap-1">
+          {/* For organizations — desktop only, subtle */}
+          <a
+            href="https://ethioleague.vercel.app/request-organization"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-secondary/60 mr-1"
+          >
+            <Building2 className="w-3.5 h-3.5" />
+            For organizations
+          </a>
+
           <Button asChild variant="ghost" size="icon" aria-label="Search">
             <Link href="/search">
               <Search className="w-5 h-5" />

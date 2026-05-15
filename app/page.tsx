@@ -403,6 +403,24 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+
+        {/* ── For organizations banner ── */}
+        <section className="rounded-2xl border border-border bg-card shadow-[var(--shadow-card)] p-5 flex flex-col sm:flex-row items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-display font-bold text-base">Manage your league or club</h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Are you a football organization, league admin, or club manager? Register on the organization portal to manage leagues, clubs, players, and live match events.
+            </p>
+          </div>
+          <a
+            href="https://ethioleague.vercel.app/request-organization"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            Register your organization →
+          </a>
+        </section>
       </div>
     </>
   );
