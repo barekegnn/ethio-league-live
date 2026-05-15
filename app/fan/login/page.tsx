@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginFan } from "@/lib/fanAuth";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function FanLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,7 +28,7 @@ export default function FanLoginPage() {
     }
 
     // Password is cosmetic — any non-empty value is accepted
-    router.push("/fan/profile");
+    window.location.href = "/fan/profile";
   }
 
   return (

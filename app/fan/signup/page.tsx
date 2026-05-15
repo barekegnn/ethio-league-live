@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { signUpFan } from "@/lib/fanAuth";
@@ -60,7 +59,6 @@ function SelectCard({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function FanSignUpPage() {
-  const router = useRouter();
   const [step, setStep] = useState(1);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -101,17 +99,22 @@ export default function FanSignUpPage() {
   }
 
   function handleSubmit() {
-    signUpFan({
-      fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone.trim() || undefined,
-      city: city.trim() || undefined,
-      preferences: {
-        favouriteLeagueIds: favLeagues,
-        favouriteClubIds: favClubs,
-      },
-    });
-    router.push("/fan/welcome");
+    try {
+      signUpFan({
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim() || undefined,
+        city: city.trim() || undefined,
+        preferences: {
+          favouriteLeagueIds: favLeagues,
+          favouriteClubIds: favClubs,
+        },
+      });
+    } catch {
+      // localStorage write failed (e.g. private browsing quota) — still navigate
+    }
+    // Use window.location for guaranteed navigation in all Vercel environments
+    window.location.href = "/fan/welcome";
   }
 
   const STEPS = ["Your info", "Favourite leagues", "Favourite clubs"];
