@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { LiveTicker } from "@/components/LiveTicker";
 import { ClubCrest } from "@/components/ClubCrest";
@@ -15,10 +15,28 @@ import { useSeasonStandings, useSeasonTopScorers } from "@/lib/api/hooks/seasons
 import { NEWS_FALLBACK } from "@/lib/staticNews";
 import type { Match, League } from "@/data/types";
 
+// ── Live timer hook ───────────────────────────────────────────────────────────
+function useLiveMinute(liveStartedAt: string | null | undefined): number {
+  const [minute, setMinute] = useState(() => {
+    if (!liveStartedAt) return 0;
+    return Math.floor((Date.now() - new Date(liveStartedAt).getTime()) / 60000);
+  });
+  useEffect(() => {
+    if (!liveStartedAt) return;
+    const update = () =>
+      setMinute(Math.floor((Date.now() - new Date(liveStartedAt).getTime()) / 60000));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [liveStartedAt]);
+  return minute;
+}
+
 // ── Compact match row ─────────────────────────────────────────────────────────
 function MatchRow({ m }: { m: Match }) {
   const isLive = m.status === "live";
   const isDone = m.status === "completed";
+  const liveMinute = useLiveMinute(isLive ? m.liveStartedAt : null);
   return (
     <Link
       href={`/match/${m.id}`}
@@ -40,7 +58,7 @@ function MatchRow({ m }: { m: Match }) {
               {m.homeScore}–{m.awayScore}
             </span>
             <span className="text-[9px] font-bold text-live flex items-center gap-0.5">
-              <span className="live-dot w-1 h-1" />{m.minute}&apos;
+              <span className="live-dot w-1 h-1" />{liveMinute}&apos;
             </span>
           </div>
         ) : isDone ? (
